@@ -191,6 +191,16 @@ class KFIndexBar: UIControl {
     
     let backView = UIView()
     
+    // MARK: orientation handling
+    
+    private var isHorizontal: Bool { return self.frame.size.width > self.frame.size.height }
+    private func selectionCoord(_ point: CGPoint) -> CGFloat { return self.isHorizontal ? point.x : point.y }
+    private func zoomingCoord(_ point: CGPoint) -> CGFloat { return self.isHorizontal ? point.y : point.x }
+    private func salientDimension(_ size: CGSize) -> CGFloat { return self.isHorizontal ? size.width : size.height }
+    
+    // MARK: ----------------
+
+    
     private func setupGeometry() {
         self.lineModel.length = self.frame.size.height
         self.backView.backgroundColor = UIColor(white: 0.8, alpha: 0.5)
@@ -218,12 +228,13 @@ class KFIndexBar: UIControl {
     var lastLabelIndex: Int? = nil
     
     private func label(from labels: [UILabel], under pos: CGFloat) -> Int? {
-        let totalHeight0 = labels.map { $0.intrinsicContentSize.height }.reduce(0,+)
-        let gap0 = labels.count>1 ? (self.frame.size.height - totalHeight0) / CGFloat(labels.count-1) : 1.0
+        let totalLabelSize = labels.map { self.salientDimension($0.intrinsicContentSize) }.reduce(0,+)
+        let gap0 = labels.count>1 ? (self.salientDimension(self.frame.size) - totalLabelSize) / CGFloat(labels.count-1) : 1.0
         var offset: CGFloat = 0.0
         for (index, label) in labels.enumerated() {
-            if pos < offset + label.intrinsicContentSize.height + gap0*0.5 { return index }
-            offset += label.intrinsicContentSize.height + gap0
+            let labelSize = self.salientDimension(label.intrinsicContentSize)
+            if pos < offset + labelSize + gap0*0.5 { return index }
+            offset += labelSize + gap0
         }
         return nil
     }
@@ -236,15 +247,18 @@ class KFIndexBar: UIControl {
         return self.innerMarkerLabels.flatMap { self.label(from: $0, under: pos) }
     }
     
-    
     private func placeTopMarkerLabels() {
         if let labels = self.topMarkerLabels, !labels.isEmpty {
             
             let topMids = self.lineModel.calculateOuterPositions(forZoomExtent: self.zoomExtent, openBelow: self.lastLabelIndex ?? 0)
             
             for (label, mid) in zip(labels, topMids) {
-                let hh = label.intrinsicContentSize.height * 0.5
-                label.frame = CGRect(x: 0.0, y: floor(mid-hh), width: self.backView.frame.size.width, height: label.intrinsicContentSize.height)
+                let r = self.salientDimension(label.intrinsicContentSize) * 0.5
+                if self.isHorizontal {
+                    label.frame = CGRect(x: floor(mid-r), y:00, width: label.intrinsicContentSize.width,  height: self.backView.frame.size.height)
+                } else {
+                    label.frame = CGRect(x: 0.0, y: floor(mid-r), width: self.backView.frame.size.width, height: label.intrinsicContentSize.height)
+                }
             }
         }
         
@@ -254,8 +268,12 @@ class KFIndexBar: UIControl {
         if let labels = self.innerMarkerLabels, !labels.isEmpty {
             let innerMids = self.lineModel.calculateInnerPositions(forZoomExtent: self.zoomExtent, openBelow: self.lastLabelIndex ?? 0)
             for (label, mid) in zip(labels, innerMids) {
-                let hh = label.intrinsicContentSize.height * 0.5
-                label.frame = CGRect(x: 0.0, y: floor(mid-hh), width: self.frame.size.width, height: label.intrinsicContentSize.height)
+                let r = self.salientDimension(label.intrinsicContentSize) * 0.5
+                if self.isHorizontal {
+                    label.frame = CGRect(x: floor(mid-r), y:00, width: label.intrinsicContentSize.width,  height: self.backView.frame.size.height)
+                } else {
+                    label.frame = CGRect(x: 0.0, y: floor(mid-r), width: self.backView.frame.size.width, height: label.intrinsicContentSize.height)
+                }
                 label.layer.opacity = Float(self.zoomExtent)
             }
         }
@@ -263,9 +281,13 @@ class KFIndexBar: UIControl {
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        self.lineModel.length = self.frame.size.height
+        self.lineModel.length = self.salientDimension(self.frame.size)
         let overhang = -self.zoomDistance * self.zoomExtent
-        self.backView.frame = CGRect(x: overhang, y: 0.0, width: self.frame.size.width-overhang, height: self.frame.size.height)
+        if self.isHorizontal {
+            self.backView.frame = CGRect(x: 0.0, y: overhang, width: self.frame.size.width, height: self.frame.size.height-overhang)
+        } else {
+            self.backView.frame = CGRect(x: overhang, y: 0.0, width: self.frame.size.width-overhang, height: self.frame.size.height)
+        }
         self.placeTopMarkerLabels()
         self.placeInnerMarkerLabels()
     }
@@ -283,25 +305,26 @@ class KFIndexBar: UIControl {
     
     override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         let loc = touch.location(in: self)
-        if loc.x >= 0.0 {
-            self.lastLabelIndex = topLabelIndex(forPosition: loc.y)
+        let zc = self.zoomingCoord(loc), sc = self.selectionCoord(loc)
+        if zc >= 0.0 {
+            self.lastLabelIndex = topLabelIndex(forPosition: sc)
             if let index = self.lastLabelIndex, let offset = self.topMarkers?[index].offset {
                 self._currentOffset = offset
             }
         }
-        if loc.x < 0.0 {
+        if zc < 0.0 {
             if let index = self.lastLabelIndex, let topMarkers = self.topMarkers, let dataSource = self.dataSource, self.zoomInState == nil || self.zoomInState?.positionAbove != index {
                 let offsetFrom = topMarkers[index].offset
                 let offsetTo = index<topMarkers.count-1 ? topMarkers[index+1].offset - 1 : Int.max
                 self.zoomInState = ZoomInState(positionAbove: index, markers: dataSource.indexBar(self, markersBetween: offsetFrom, and: offsetTo))
             }
         }
-        if self.snappedToZoomIn, let zoomInState = self.zoomInState, let index = innerLabelIndex(forPosition: loc.y) {
+        if self.snappedToZoomIn, let zoomInState = self.zoomInState, let index = innerLabelIndex(forPosition: sc) {
             let marker = zoomInState.markers[index]
             self._currentOffset = marker.offset
         }
         
-        self.zoomExtent = self.snappedToZoomIn ? 1.0 : min(1.0, max(0.0, -(loc.x / self.zoomDistance)))
+        self.zoomExtent = self.snappedToZoomIn ? 1.0 : min(1.0, max(0.0, -(zc / self.zoomDistance)))
         return true
     }
     

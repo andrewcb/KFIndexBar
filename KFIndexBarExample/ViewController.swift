@@ -15,6 +15,8 @@ class ViewController: UIViewController {
     
     var items: [String] = surnames
 
+    var indexConstraints: [NSLayoutAttribute:NSLayoutConstraint] = [:]
+
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
@@ -22,19 +24,36 @@ class ViewController: UIViewController {
         let indexBar = KFIndexBar(frame: .zero)
         self.view.addSubview(indexBar)
         indexBar.translatesAutoresizingMaskIntoConstraints = false
-        for attr in [ NSLayoutAttribute.right, NSLayoutAttribute.bottom] {
+        for attr: NSLayoutAttribute in [ .left, .right, .bottom] {
             let c = NSLayoutConstraint(item: indexBar, attribute: attr, relatedBy: .equal, toItem: self.view, attribute: attr, multiplier: 1.0, constant: 0.0)
             self.view.addConstraint(c)
+            self.indexConstraints[attr] = c
         }
-        self.view.addConstraint(NSLayoutConstraint(item: indexBar, attribute: .top, relatedBy: .equal, toItem: self.topLayoutGuide, attribute: .bottom, multiplier: 1.0, constant: 0.0))
+        let topConstraint = NSLayoutConstraint(item: indexBar, attribute: .top, relatedBy: .equal, toItem: self.topLayoutGuide, attribute: .bottom, multiplier: 1.0, constant: 0.0)
+        self.view.addConstraint(topConstraint)
+        self.indexConstraints[.top] = topConstraint
+        
         let cw = NSLayoutConstraint(item: indexBar, attribute: NSLayoutAttribute.width, relatedBy: .equal, toItem: nil, attribute: .notAnAttribute, multiplier: 1.0, constant: 20.0)
+        self.indexConstraints[.width] = cw
         self.view.addConstraint(cw)
+        let ch = NSLayoutConstraint(item: indexBar, attribute: NSLayoutAttribute.height, relatedBy: .equal, toItem: nil, attribute: .notAnAttribute, multiplier: 1.0, constant: 40.0)
+        self.view.addConstraint(ch)
+        self.indexConstraints[NSLayoutAttribute.height] = ch
 
+        if self.isIpad {
+            self.indexConstraints[.width]?.isActive = false
+            self.indexConstraints[.top]?.isActive = false
+        } else {
+            self.indexConstraints[.height]?.isActive = false
+            self.indexConstraints[.left]?.isActive = false
+        }
+        
         indexBar.dataSource = self
         self.indexBar = indexBar
         
         indexBar.addTarget(self, action: #selector(self.indexViewValueChanged(sender:)), for: .valueChanged)
-
+        
+        (self.collectionView?.collectionViewLayout as? UICollectionViewFlowLayout)?.scrollDirection = self.isIpad ? .horizontal : .vertical
 
     }
     
@@ -44,11 +63,12 @@ class ViewController: UIViewController {
     }
     
     func indexViewValueChanged(sender: KFIndexBar) {
-        let isIpad = false
         let offset = sender.currentOffset
         print(">>> \(offset)")
-        collectionView?.scrollToItem(at: IndexPath(item:offset, section:0), at: isIpad ? .left : .top, animated: false)
+        collectionView?.scrollToItem(at: IndexPath(item:offset, section:0), at: self.isIpad ? .left : .top, animated: false)
     }
+    
+    var isIpad: Bool { return self.traitCollection.horizontalSizeClass == .regular }
 
 }
 
@@ -94,6 +114,6 @@ extension ViewController: UICollectionViewDataSource {
 
 extension ViewController: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        return CGSize(width: collectionView.frame.size.width, height: 40.0)
+        return CGSize(width: (self.isIpad ? 320.0 : collectionView.frame.size.width), height: 40.0)
     }
 }
