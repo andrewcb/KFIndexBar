@@ -13,6 +13,11 @@
 		44C4DB041F558CB000A92188 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 44C4DB031F558CB000A92188 /* Assets.xcassets */; };
 		44C4DB071F558CB000A92188 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 44C4DB051F558CB000A92188 /* LaunchScreen.storyboard */; };
 		44C4DB121F558CB000A92188 /* KFIndexBarExampleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB111F558CB000A92188 /* KFIndexBarExampleTests.swift */; };
+		44C4DB1D1F558EEF00A92188 /* CollectionViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB1C1F558EEF00A92188 /* CollectionViewCell.swift */; };
+		44C4DB1F1F5595A000A92188 /* surnames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB1E1F5595A000A92188 /* surnames.swift */; };
+		44C4DB221F55976E00A92188 /* KFIndexBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB211F55976E00A92188 /* KFIndexBar.swift */; };
+		44C4DB241F572F9400A92188 /* ArrayExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB231F572F9400A92188 /* ArrayExtensions.swift */; };
+		44C4DB261F5AF32200A92188 /* KFIndexBarLineModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB251F5AF32200A92188 /* KFIndexBarLineModelTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +41,11 @@
 		44C4DB0D1F558CB000A92188 /* KFIndexBarExampleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KFIndexBarExampleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		44C4DB111F558CB000A92188 /* KFIndexBarExampleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KFIndexBarExampleTests.swift; sourceTree = "<group>"; };
 		44C4DB131F558CB000A92188 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		44C4DB1C1F558EEF00A92188 /* CollectionViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CollectionViewCell.swift; sourceTree = "<group>"; };
+		44C4DB1E1F5595A000A92188 /* surnames.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = surnames.swift; sourceTree = "<group>"; };
+		44C4DB211F55976E00A92188 /* KFIndexBar.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = KFIndexBar.swift; path = KFIndexBar/KFIndexBar.swift; sourceTree = "<group>"; };
+		44C4DB231F572F9400A92188 /* ArrayExtensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ArrayExtensions.swift; sourceTree = "<group>"; };
+		44C4DB251F5AF32200A92188 /* KFIndexBarLineModelTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KFIndexBarLineModelTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -59,6 +69,7 @@
 		44C4DAF01F558CB000A92188 = {
 			isa = PBXGroup;
 			children = (
+				44C4DB201F55974700A92188 /* KFIndexBar */,
 				44C4DAFB1F558CB000A92188 /* KFIndexBarExample */,
 				44C4DB101F558CB000A92188 /* KFIndexBarExampleTests */,
 				44C4DAFA1F558CB000A92188 /* Products */,
@@ -83,6 +94,9 @@
 				44C4DB031F558CB000A92188 /* Assets.xcassets */,
 				44C4DB051F558CB000A92188 /* LaunchScreen.storyboard */,
 				44C4DB081F558CB000A92188 /* Info.plist */,
+				44C4DB1C1F558EEF00A92188 /* CollectionViewCell.swift */,
+				44C4DB1E1F5595A000A92188 /* surnames.swift */,
+				44C4DB231F572F9400A92188 /* ArrayExtensions.swift */,
 			);
 			path = KFIndexBarExample;
 			sourceTree = "<group>";
@@ -92,8 +106,17 @@
 			children = (
 				44C4DB111F558CB000A92188 /* KFIndexBarExampleTests.swift */,
 				44C4DB131F558CB000A92188 /* Info.plist */,
+				44C4DB251F5AF32200A92188 /* KFIndexBarLineModelTests.swift */,
 			);
 			path = KFIndexBarExampleTests;
+			sourceTree = "<group>";
+		};
+		44C4DB201F55974700A92188 /* KFIndexBar */ = {
+			isa = PBXGroup;
+			children = (
+				44C4DB211F55976E00A92188 /* KFIndexBar.swift */,
+			);
+			name = KFIndexBar;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -202,7 +225,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				44C4DAFF1F558CB000A92188 /* ViewController.swift in Sources */,
+				44C4DB241F572F9400A92188 /* ArrayExtensions.swift in Sources */,
 				44C4DAFD1F558CB000A92188 /* AppDelegate.swift in Sources */,
+				44C4DB1D1F558EEF00A92188 /* CollectionViewCell.swift in Sources */,
+				44C4DB1F1F5595A000A92188 /* surnames.swift in Sources */,
+				44C4DB221F55976E00A92188 /* KFIndexBar.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -211,6 +238,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				44C4DB121F558CB000A92188 /* KFIndexBarExampleTests.swift in Sources */,
+				44C4DB261F5AF32200A92188 /* KFIndexBarLineModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -414,6 +442,7 @@
 				44C4DB181F558CB000A92188 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		44C4DB191F558CB000A92188 /* Build configuration list for PBXNativeTarget "KFIndexBarExampleTests" */ = {
 			isa = XCConfigurationList;
@@ -422,6 +451,7 @@
 				44C4DB1B1F558CB000A92188 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
