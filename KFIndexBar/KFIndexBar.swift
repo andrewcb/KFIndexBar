@@ -259,6 +259,7 @@ class KFIndexBar: UIControl {
                 } else {
                     label.frame = CGRect(x: 0.0, y: floor(mid-r), width: self.backView.frame.size.width, height: label.intrinsicContentSize.height)
                 }
+                label.layer.opacity = Float(1.0-self.zoomExtent)
             }
         }
         
@@ -306,17 +307,19 @@ class KFIndexBar: UIControl {
     override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         let loc = touch.location(in: self)
         let zc = self.zoomingCoord(loc), sc = self.selectionCoord(loc)
-        if zc >= 0.0 {
-            self.lastLabelIndex = topLabelIndex(forPosition: sc)
-            if let index = self.lastLabelIndex, let offset = self.topMarkers?[index].offset {
-                self._currentOffset = offset
+        if !self.snappedToZoomIn {
+            if zc >= 0.0 {
+                self.lastLabelIndex = topLabelIndex(forPosition: sc)
+                if let index = self.lastLabelIndex, let offset = self.topMarkers?[index].offset {
+                    self._currentOffset = offset
+                }
             }
-        }
-        if zc < 0.0 {
-            if let index = self.lastLabelIndex, let topMarkers = self.topMarkers, let dataSource = self.dataSource, self.zoomInState == nil || self.zoomInState?.positionAbove != index {
-                let offsetFrom = topMarkers[index].offset
-                let offsetTo = index<topMarkers.count-1 ? topMarkers[index+1].offset - 1 : Int.max
-                self.zoomInState = ZoomInState(positionAbove: index, markers: dataSource.indexBar(self, markersBetween: offsetFrom, and: offsetTo))
+            if zc < 0.0 {
+                if let index = self.lastLabelIndex, let topMarkers = self.topMarkers, let dataSource = self.dataSource, self.zoomInState == nil || self.zoomInState?.positionAbove != index {
+                    let offsetFrom = topMarkers[index].offset
+                    let offsetTo = index<topMarkers.count-1 ? topMarkers[index+1].offset - 1 : Int.max
+                    self.zoomInState = ZoomInState(positionAbove: index, markers: dataSource.indexBar(self, markersBetween: offsetFrom, and: offsetTo))
+                }
             }
         }
         if self.snappedToZoomIn, let zoomInState = self.zoomInState, let index = innerLabelIndex(forPosition: sc) {
