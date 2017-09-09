@@ -156,6 +156,7 @@ class KFIndexBar: UIControl {
         label.font = font
         label.text = marker.label
         label.textAlignment = .center
+        label.textColor = self.tintColor
         return label
     }
     
@@ -202,12 +203,11 @@ class KFIndexBar: UIControl {
     
     private func setupGeometry() {
         self.lineModel.length = self.frame.size.height
-        self.backView.backgroundColor = UIColor(white: 0.95, alpha: 0.5)
+        self.backView.backgroundColor = UIColor(white: 1.0, alpha: 0.5)
         self.backView.layer.cornerRadius = 8.0
         self.backView.frame = self.bounds
         self.backView.isUserInteractionEnabled = false
         self.addSubview(backView)
-        
     }
     
     override init(frame: CGRect) {
@@ -332,5 +332,16 @@ class KFIndexBar: UIControl {
             self.snappedToZoomIn = false
             self.layoutSubviews()
         }
-    }    
+    }
+    
+    override func tintColorDidChange() {
+        super.tintColorDidChange()
+        let color = (self.tintAdjustmentMode == .dimmed ? UIColor.lightGray : self.tintColor)
+        for label in self.topMarkerLabels ?? [] {
+            label.textColor = color
+        }
+        for label in self.innerMarkerLabels ?? [] {
+            label.textColor = color
+        }
+    }
 }
