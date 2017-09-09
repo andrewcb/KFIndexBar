@@ -12,26 +12,33 @@ import XCTest
 class KFIndexBarLineModelTests: XCTestCase {
     
     func testOuterItemPositions0() {
-        var lineModel = KFIndexBar.LineModel(length: 10.0, zoomClearance: 1.0)
+        var lineModel = KFIndexBar.LineModel(length: 10.0, margin: 1.0)
         lineModel.outerItemSizes = [4.0, 1.0, 3.0 ]
         let outer0 = lineModel.calculateOuterPositions(forZoomExtent: 0.0, openBelow: 0)
         XCTAssertEqual(outer0, [2.0, 5.5, 8.5])
     }
 
+    func testOuterItemPositions0Centering() {
+        var lineModel = KFIndexBar.LineModel(length: 12.0, margin: 1.0)
+        lineModel.outerItemSizes = [4.0, 1.0, 3.0 ]
+        let outer0 = lineModel.calculateOuterPositions(forZoomExtent: 0.0, openBelow: 0)
+        XCTAssertEqual(outer0, [3.0, 6.5, 9.5])
+    }
+    
     func testOuterItemPositions1() {
-        var lineModel = KFIndexBar.LineModel(length: 10.0, zoomClearance: 1.0)
+        var lineModel = KFIndexBar.LineModel(length: 10.0, margin: 1.0)
         lineModel.outerItemSizes = [4.0, 1.0, 3.0 ]
         let outer1 = lineModel.calculateOuterPositions(forZoomExtent: 1.0, openBelow: 0)
         print(outer1)
 //        let (outer1, _) = lineModel.calculatePositions(forZoomExtent: 1.0, fixedPoint: 4.5)
-        XCTAssertTrue(fabs(outer1[0] - (-(lineModel.zoomClearance + 2.0))) < 0.001)
-        XCTAssertTrue(fabs(outer1[1] - (lineModel.length+lineModel.zoomClearance + 0.5)) < 0.001)
+        XCTAssertTrue(fabs(outer1[0] - (-(lineModel.margin + 2.0))) < 0.001)
+        XCTAssertTrue(fabs(outer1[1] - (lineModel.length+lineModel.margin + 0.5)) < 0.001)
         
 //        XCTAssertEqual(outer1, [CGFloat(-3.0), CGFloat(11.5), CGFloat(23.9286)])
     }
 
     func testOuterItemPositionsHalfway() {
-        var lineModel = KFIndexBar.LineModel(length: 10.0, zoomClearance: 1.0)
+        var lineModel = KFIndexBar.LineModel(length: 10.0, margin: 1.0)
         lineModel.outerItemSizes = [4.0, 1.0, 3.0 ]
         let outer1 = lineModel.calculateOuterPositions(forZoomExtent: 0.5, openBelow: 0)
         print(outer1)

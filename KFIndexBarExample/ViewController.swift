@@ -88,7 +88,7 @@ extension ViewController: KFIndexBarDataSource {
     }
     
     func indexBar(_ indexBar: KFIndexBar, markersBetween start: Int, and end: Int) -> [KFIndexBar.Marker] {
-        let groups = items[start..<end].map{$0}.group(byKey: { $0.isEmpty ? "" : $0.substring(to:$0.index($0.startIndex, offsetBy:min(2, $0.characters.count))).uppercased() }, transform: {$0})
+        let groups = items[start..<min(items.count,end)].map{$0}.group(byKey: { $0.isEmpty ? "" : $0.substring(to:$0.index($0.startIndex, offsetBy:min(2, $0.characters.count))).uppercased() }, transform: {$0})
         let markers: [KFIndexBar.Marker] = groups.reduce(([],start)) { (acc, group) -> ([KFIndexBar.Marker], Int) in
             (acc.0 + [KFIndexBar.Marker(label:group.0, offset:acc.1)], acc.1+group.1.count)
             }.0
