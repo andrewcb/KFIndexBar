@@ -111,13 +111,30 @@ class KFIndexBar: UIControl {
         
         func calculateInnerPositions(forZoomExtent zoomExtent: CGFloat, openBelow index: Int) -> [CGFloat] {
             let origin: CGFloat
+            let centre = self.length * 0.5
             if let outerMidpoints = self.outerItemMidpoints0, let outerSizes = self.outerItemSizes {
                 origin = (index < outerMidpoints.count-1) ? ((outerMidpoints[index]+outerSizes[index]*0.5)+(outerMidpoints[index+1]-outerSizes[index+1]*0.5))*0.5 : self.length-1.0
             } else {
-                origin = self.length * 0.5
+                origin = centre
             }
+            let oc = origin - centre
+            let delta: CGFloat
+            if
+                let ma = self.innerItemMidpoints1?.first,
+                let sa = self.innerItemSizes?.first,
+                let mz = self.innerItemMidpoints1?.last,
+                let sz = self.innerItemSizes?.last
+            {
+                if origin < centre {
+                    let ea = ma-sa*0.5
+                    delta =  max(0, ea+oc) - ea
+                } else {
+                    let ez = mz+sz*0.5
+                    delta = min(self.length-1.0, ez+oc) - ez
+                }
+            } else { delta = 0 }
             let innerZoomExtent = zoomExtent
-            return (self.innerItemMidpoints1 ?? []).map { origin * (1-innerZoomExtent) + $0 * innerZoomExtent }
+            return (self.innerItemMidpoints1 ?? []).map { origin * (1-innerZoomExtent) + ($0+delta) * innerZoomExtent }
         }
     }
     
@@ -289,12 +306,20 @@ class KFIndexBar: UIControl {
     
     func reloadData() {
         self.topMarkers = self.dataSource?.topLevelMarkers(forIndexBar: self) ?? []
+        self._zoomExtent = 0.0
+        self.setNeedsLayout()
     }
 
     
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         self._zoomExtent = 0.0
         self.snappedToZoomIn = false
+        let loc = touch.location(in: self)
+        let sc = self.selectionCoord(loc)
+        self.lastLabelIndex = topLabelIndex(forPosition: sc)
+        if let index = self.lastLabelIndex, let offset = self.topMarkers?[index].offset {
+            self._currentOffset = offset
+        }
         return true
     }
     
@@ -311,7 +336,7 @@ class KFIndexBar: UIControl {
             if zc < 0.0 {
                 if let index = self.lastLabelIndex, let topMarkers = self.topMarkers, let dataSource = self.dataSource, self.zoomInState == nil || self.zoomInState?.positionAbove != index {
                     let offsetFrom = topMarkers[index].offset
-                    let offsetTo = index<topMarkers.count-1 ? topMarkers[index+1].offset - 1 : Int.max
+                    let offsetTo = index<topMarkers.count-1 ? topMarkers[index+1].offset : Int.max
                     self.zoomInState = ZoomInState(positionAbove: index, markers: dataSource.indexBar(self, markersBetween: offsetFrom, and: offsetTo))
                 }
             }
@@ -321,7 +346,8 @@ class KFIndexBar: UIControl {
             self._currentOffset = marker.offset
         }
         
-        self.zoomExtent = self.snappedToZoomIn ? 1.0 : min(1.0, max(0.0, -(zc / self.zoomDistance)))
+        let canZoomIn = !(self.zoomInState?.markers.isEmpty ?? true)
+        self.zoomExtent = canZoomIn ? (self.snappedToZoomIn ? 1.0 : min(1.0, max(0.0, -(zc / self.zoomDistance)))) : 0.0
         return true
     }
     
