@@ -13,7 +13,7 @@ class ViewController: UIViewController {
     @IBOutlet var collectionView: UICollectionView?
     var indexBar:  KFIndexBar?
     
-    var items: [String] = surnames
+    var items: [String] = surnames//[0..<300].map { $0 }
 
     var indexConstraints: [NSLayoutAttribute:NSLayoutConstraint] = [:]
 
@@ -62,9 +62,8 @@ class ViewController: UIViewController {
         self.indexBar?.reloadData()
     }
     
-    func indexViewValueChanged(sender: KFIndexBar) {
+    @objc func indexViewValueChanged(sender: KFIndexBar) {
         let offset = sender.currentOffset
-        print(">>> \(offset)")
         collectionView?.scrollToItem(at: IndexPath(item:offset, section:0), at: self.isIpad ? .left : .top, animated: false)
     }
     

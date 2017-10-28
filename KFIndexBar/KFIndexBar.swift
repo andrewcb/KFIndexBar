@@ -19,7 +19,7 @@ class KFIndexBar: UIControl {
         let label: String
         let offset: Int
     }
-
+    
     var dataSource: KFIndexBarDataSource? = nil
     
     var currentOffset: Int { return self._currentOffset }
@@ -42,7 +42,7 @@ class KFIndexBar: UIControl {
         }
         // The distance between the nearest outer label, when moved out of the frame, and the frame
         let margin: CGFloat
-
+        
         var outerItemSizes: [CGFloat]? {
             didSet { self.recalcOuterMidpoints() }
         }
@@ -73,7 +73,7 @@ class KFIndexBar: UIControl {
             }).0
             return (midpoints, itemGap)
         }
-
+        
         mutating func recalcOuterMidpoints() {
             let (midpoints, itemGap) = self.outerItemSizes.map { self.midpointsAndGap(for: $0) } ?? ([], self.margin)
             self.outerItemMidpoints0 = midpoints
@@ -149,7 +149,7 @@ class KFIndexBar: UIControl {
         set(v) { self._zoomExtent = v ; if v >= 1.0 { self.snappedToZoomIn = true } ; self.setNeedsLayout() }
     }
     var snappedToZoomIn: Bool = false
-
+    
     // touch state: tracking zoomed in points
     struct ZoomInState {
         var positionAbove: Int
@@ -174,6 +174,7 @@ class KFIndexBar: UIControl {
         label.text = marker.label
         label.textAlignment = .center
         label.textColor = self.tintColor
+        label.sizeToFit()
         return label
     }
     
@@ -197,7 +198,7 @@ class KFIndexBar: UIControl {
             }
             if let labels = self.innerMarkerLabels, !labels.isEmpty {
                 for label in labels {
-                    self.backView.addSubview(label)
+                    self.innerLabelFrameView.addSubview(label)
                 }
             }
             self.lineModel.innerItemSizes = (self.innerMarkerLabels ?? []).map { $0.intrinsicContentSize.height }
@@ -207,16 +208,34 @@ class KFIndexBar: UIControl {
     var lineModel: LineModel = LineModel(length:0.0)
     
     let backView = UIView()
+    let innerLabelFrameView: UIView = {
+        let v = UIView()
+        v.layer.cornerRadius = 8.0
+        v.backgroundColor = UIColor(white: 0.95, alpha: 0.6)
+        v.layer.borderColor = UIColor(white: 0.94, alpha: 0.6).cgColor
+        v.layer.borderWidth = 1.0
+        //        if #available(iOS 10.0, *) {
+        //            if let filter = CIFilter(name: "CIGaussianBlur") {
+        //                filter.setDefaults()
+        //                filter.name = "blur"
+        //                v.layer.filters = [ filter ]
+        //                v.layer.setValue(5,
+        //                               forKeyPath: "filters.blur.inputRadius")
+        //            }
+        //        }
+        return v
+    }()
     
     // MARK: orientation handling
     
     private var isHorizontal: Bool { return self.frame.size.width > self.frame.size.height }
     private func selectionCoord(_ point: CGPoint) -> CGFloat { return self.isHorizontal ? point.x : point.y }
     private func zoomingCoord(_ point: CGPoint) -> CGFloat { return self.isHorizontal ? point.y : point.x }
-    private func salientDimension(_ size: CGSize) -> CGFloat { return self.isHorizontal ? size.width : size.height }
+    private func selectionDimension(_ size: CGSize) -> CGFloat { return self.isHorizontal ? size.width : size.height }
+    private func zoomingDimension(_ size: CGSize) -> CGFloat { return self.isHorizontal ? size.height : size.width }
     
     // MARK: ----------------
-
+    
     
     private func setupGeometry() {
         self.lineModel.length = self.frame.size.height
@@ -225,6 +244,8 @@ class KFIndexBar: UIControl {
         self.backView.frame = self.bounds
         self.backView.isUserInteractionEnabled = false
         self.addSubview(backView)
+        backView.addSubview(self.innerLabelFrameView)
+        self.innerLabelFrameView.frame = .zero
     }
     
     override init(frame: CGRect) {
@@ -247,7 +268,7 @@ class KFIndexBar: UIControl {
         guard let first = labels.first?.frame, let last = labels.last?.frame else { return nil }
         if pos < self.selectionCoord(first.origin) { return nil }
         if let index = (labels.enumerated().first { self.selectionCoord($0.element.frame.origin) > pos } ) { return index.offset - 1 }
-        return pos < self.selectionCoord(last.origin)+self.salientDimension(last.size) ? labels.count - 1 : nil
+        return pos < self.selectionCoord(last.origin)+self.selectionDimension(last.size) ? labels.count - 1 : nil
     }
     
     func topLabelIndex(forPosition pos: CGFloat) -> Int? {
@@ -255,7 +276,7 @@ class KFIndexBar: UIControl {
     }
     
     func innerLabelIndex(forPosition pos: CGFloat) -> Int? {
-        return self.innerMarkerLabels.flatMap { self.label(from: $0, under: pos) }
+        return self.innerMarkerLabels.flatMap { self.label(from: $0, under: pos - self.selectionCoord(self.innerLabelFrameView.frame.origin)) }
     }
     
     private func placeTopMarkerLabels() {
@@ -264,7 +285,7 @@ class KFIndexBar: UIControl {
             let topMids = self.lineModel.calculateOuterPositions(forZoomExtent: self.zoomExtent, openBelow: self.lastLabelIndex ?? 0)
             
             for (label, mid) in zip(labels, topMids) {
-                let r = self.salientDimension(label.intrinsicContentSize) * 0.5
+                let r = self.selectionDimension(label.intrinsicContentSize) * 0.5
                 if self.isHorizontal {
                     label.frame = CGRect(x: floor(mid-r), y:0, width: label.intrinsicContentSize.width,  height: self.backView.frame.size.height)
                 } else {
@@ -273,27 +294,53 @@ class KFIndexBar: UIControl {
                 label.layer.opacity = Float(1.0-self.zoomExtent)
             }
         }
-        
     }
     
     private func placeInnerMarkerLabels() {
         if let labels = self.innerMarkerLabels, !labels.isEmpty {
+            let rFirst = ceil(self.selectionDimension(labels.first!.intrinsicContentSize) * 0.5)
+            let rLast = ceil(self.selectionDimension(labels.last!.intrinsicContentSize) * 0.5)
+            // width/height of the row
+            let rowBreadth = labels.map { self.zoomingDimension($0.bounds.size) }.max() ?? 0.0
+            
             let innerMids = self.lineModel.calculateInnerPositions(forZoomExtent: self.zoomExtent, openBelow: self.lastLabelIndex ?? 0)
-            for (label, mid) in zip(labels, innerMids) {
-                let r = self.salientDimension(label.intrinsicContentSize) * 0.5
-                if self.isHorizontal {
-                    label.frame = CGRect(x: floor(mid-r), y:00, width: label.intrinsicContentSize.width,  height: self.backView.frame.size.height)
-                } else {
-                    label.frame = CGRect(x: 0.0, y: floor(mid-r), width: self.backView.frame.size.width, height: label.intrinsicContentSize.height)
-                }
-                label.layer.opacity = Float(self.zoomExtent)
+            let labelsLateralOffset: CGFloat
+            let curvedExtent = 1.0 - ((1.0-self.zoomExtent)*(1.0-self.zoomExtent))
+            if self.isHorizontal {
+                labelsLateralOffset = -((self.zoomDistance+55) * curvedExtent) - 0
+            } else {
+                labelsLateralOffset = -((self.zoomDistance+80) * curvedExtent) - 0
             }
+            
+            let margin: CGFloat = 4.0, x0:CGFloat, y0:CGFloat, w: CGFloat, h: CGFloat
+            if self.isHorizontal {
+                x0 = (innerMids.first ?? 0) - rFirst - margin
+                y0 = labelsLateralOffset - ceil(rowBreadth*0.5) - margin
+                w = (innerMids.last ?? 0) - x0 + rLast + margin
+                h = rowBreadth + 2*margin
+            } else {
+                y0 = (innerMids.first ?? 0) - rFirst - margin
+                x0 = labelsLateralOffset - ceil(rowBreadth*0.5) - margin
+                h = (innerMids.last ?? 0) - y0 + rLast + margin
+                w = rowBreadth + 2*margin
+            }
+            
+            self.innerLabelFrameView.frame = CGRect(x: x0, y: y0, width: w, height: h)
+            
+            for (label, mid) in zip(labels, innerMids) {
+                if self.isHorizontal {
+                    label.center = CGPoint(x: mid-x0, y:labelsLateralOffset-y0)
+                } else {
+                    label.center = CGPoint(x: labelsLateralOffset-x0, y: mid-y0)
+                }
+            }
+            self.innerLabelFrameView.layer.opacity = Float(self.zoomExtent)
         }
     }
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        self.lineModel.length = self.salientDimension(self.frame.size)
+        self.lineModel.length = self.selectionDimension(self.frame.size)
         let overhang = -self.zoomDistance * self.zoomExtent
         if self.isHorizontal {
             self.backView.frame = CGRect(x: 0.0, y: overhang, width: self.frame.size.width, height: self.frame.size.height-overhang)
@@ -309,7 +356,7 @@ class KFIndexBar: UIControl {
         self._zoomExtent = 0.0
         self.setNeedsLayout()
     }
-
+    
     
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         self._zoomExtent = 0.0
@@ -371,3 +418,4 @@ class KFIndexBar: UIControl {
         }
     }
 }
+
