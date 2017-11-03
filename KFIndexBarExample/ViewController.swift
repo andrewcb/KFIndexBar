@@ -24,11 +24,17 @@ class ViewController: UIViewController {
         let indexBar = KFIndexBar(frame: .zero)
         self.view.addSubview(indexBar)
         indexBar.translatesAutoresizingMaskIntoConstraints = false
-        for attr: NSLayoutAttribute in [ .left, .right, .bottom] {
+        for attr: NSLayoutAttribute in [ .left, .right] {
             let c = NSLayoutConstraint(item: indexBar, attribute: attr, relatedBy: .equal, toItem: self.view, attribute: attr, multiplier: 1.0, constant: 0.0)
             self.view.addConstraint(c)
             self.indexConstraints[attr] = c
         }
+        // raise it a bit to avoid the iOS 11 dock
+        let majorOSVersion = UIDevice.current.systemVersion.components(separatedBy:".").first.flatMap { Int($0) }
+        let bottomConstraint = NSLayoutConstraint(item: indexBar, attribute: .bottom, relatedBy: .equal, toItem: self.view, attribute: .bottom, multiplier: 1.0, constant: (self.isIpad && (majorOSVersion ?? 0) >= 11) ? -4.0 : 0.0)
+        self.view.addConstraint(bottomConstraint)
+        self.indexConstraints[.bottom] = bottomConstraint
+
         let topConstraint = NSLayoutConstraint(item: indexBar, attribute: .top, relatedBy: .equal, toItem: self.topLayoutGuide, attribute: .bottom, multiplier: 1.0, constant: 0.0)
         self.view.addConstraint(topConstraint)
         self.indexConstraints[.top] = topConstraint
