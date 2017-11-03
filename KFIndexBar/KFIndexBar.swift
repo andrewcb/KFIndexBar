@@ -418,13 +418,7 @@ class KFIndexBar: UIControl {
         guard let zoomInContext = self.zoomInContext else { fatalError("Can't place inner label view without context") }
         let (innerMids, innerDelta) = self.lineModel.calculateInnerPositions(forZoomExtent: self.zoomExtent, openBelow: self.lastLabelIndex ?? 0)
         self.innerMarkerDelta = innerDelta
-        let labelsLateralOffset: CGFloat
         let curvedExtent = 1.0 - ((1.0-self.zoomExtent)*(1.0-self.zoomExtent))
-        if self.isHorizontal {
-            labelsLateralOffset = -((self.zoomDistance+55) * curvedExtent) - 0
-        } else {
-            labelsLateralOffset = innerLabelViewMargin // -((self.zoomDistance+80) * curvedExtent) - 0
-        }
         let rα = (self.lineModel.inner1.itemSizes?.first ?? 0)*0.5
         let rΩ = (self.lineModel.inner1.itemSizes?.last ?? 0)*0.5
         let rowBreadth = self.zoomingDimension(zoomInContext.maxMarkerSize)
@@ -432,15 +426,16 @@ class KFIndexBar: UIControl {
         let x0:CGFloat, y0:CGFloat, w: CGFloat, h: CGFloat
         let margin = innerLabelViewMargin + innerLabelViewPadding
         if self.isHorizontal {
+            let labelsLateralOffset = -((self.zoomDistance+55) * curvedExtent) - 0
             x0 = (innerMids.first ?? 0) - rα - margin
             y0 = labelsLateralOffset - ceil(rowBreadth*0.5) - margin
             w = (innerMids.last ?? 0) - x0 + rΩ + 2*margin
             h = rowBreadth + 2*margin
         } else {
             y0 = (innerMids.first ?? 0) - rα - margin
-            x0 = labelsLateralOffset - ceil(rowBreadth*0.5) - margin
-            h = (innerMids.last ?? 0) - y0 + rΩ + margin
             w = rowBreadth + 2*margin
+            x0 = min((self.frame.size.width - w) * 0.5, self.frame.size.width - w + margin)
+            h = (innerMids.last ?? 0) - y0 + rΩ + margin
         }
         self.innerLabelFrameView.frame = CGRect(x: x0, y: y0, width: w, height: h)
         
