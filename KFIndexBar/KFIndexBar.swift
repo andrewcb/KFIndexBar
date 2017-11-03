@@ -375,16 +375,34 @@ class KFIndexBar: UIControl {
         if let topMarkerContext = self.topMarkerContext {
             let topMids = self.lineModel.calculateOuterPositions(forZoomExtent: self.zoomExtent, openBelow: self.lastLabelIndex ?? 0)
             
+            let r = self.selectionDimension(topMarkerContext.maxMarkerSize)*0.5
+            if
+                let start = (topMids.first.map { $0 - r - innerLabelViewPadding }),
+                let end = (topMids.last.map { $0 + r + 2*innerLabelViewPadding }),
+                let ctx = UIGraphicsGetCurrentContext()
+            {
+                let ext = end-start
+                let x = self.isHorizontal ? start : 0.0
+                let y = self.isHorizontal ? 0.0 : start
+                let width = self.isHorizontal ? ext : self.frame.size.width
+                let height = self.isHorizontal ? self.frame.size.height : ext
+                ctx.addPath(UIBezierPath(roundedRect: CGRect(x: x, y: y, width: width, height: height), cornerRadius: innerLabelViewPadding).cgPath)
+                ctx.setFillColor(UIColor(white: 0.95, alpha: 0.5*(1-self.zoomExtent)).cgColor)
+                ctx.closePath()
+                ctx.fillPath()
+
+            }
+            
             if self.isHorizontal {
                 let ypos = (self.frame.size.height - topMarkerContext.maxMarkerSize.height) * 0.5
                 for (mid, img) in zip(topMids, topMarkerContext.markerImages) {
-                    img.draw(at: CGPoint(x: mid - topMarkerContext.maxMarkerSize.width*0.5, y:ypos))
+                    img.draw(at: CGPoint(x: mid - topMarkerContext.maxMarkerSize.width*0.5, y:ypos), blendMode: .normal, alpha: (1.0-0.5*zoomExtent))
                 }
                 
             } else {
                 let xpos = (self.frame.size.width - topMarkerContext.maxMarkerSize.width) * 0.5
                 for (mid, img) in zip(topMids, topMarkerContext.markerImages) {
-                    img.draw(at: CGPoint(x: xpos, y:mid - topMarkerContext.maxMarkerSize.height*0.5))
+                    img.draw(at: CGPoint(x: xpos, y:mid - topMarkerContext.maxMarkerSize.height*0.5), blendMode: .normal, alpha: (1.0-0.5*zoomExtent))
                 }
             }
         }
