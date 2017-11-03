@@ -33,18 +33,18 @@ class ViewController: UIViewController {
         self.view.addConstraint(topConstraint)
         self.indexConstraints[.top] = topConstraint
         
-        let cw = NSLayoutConstraint(item: indexBar, attribute: NSLayoutAttribute.width, relatedBy: .equal, toItem: nil, attribute: .notAnAttribute, multiplier: 1.0, constant: 20.0)
-        self.indexConstraints[.width] = cw
-        self.view.addConstraint(cw)
-        let ch = NSLayoutConstraint(item: indexBar, attribute: NSLayoutAttribute.height, relatedBy: .equal, toItem: nil, attribute: .notAnAttribute, multiplier: 1.0, constant: 40.0)
-        self.view.addConstraint(ch)
-        self.indexConstraints[NSLayoutAttribute.height] = ch
+//        let cw = NSLayoutConstraint(item: indexBar, attribute: NSLayoutAttribute.width, relatedBy: .equal, toItem: nil, attribute: .notAnAttribute, multiplier: 1.0, constant: 20.0)
+//        self.indexConstraints[.width] = cw
+//        self.view.addConstraint(cw)
+//        let ch = NSLayoutConstraint(item: indexBar, attribute: NSLayoutAttribute.height, relatedBy: .equal, toItem: nil, attribute: .notAnAttribute, multiplier: 1.0, constant: 40.0)
+//        self.view.addConstraint(ch)
+//        self.indexConstraints[NSLayoutAttribute.height] = ch
 
         if self.isIpad {
-            self.indexConstraints[.width]?.isActive = false
+//            self.indexConstraints[.width]?.isActive = false
             self.indexConstraints[.top]?.isActive = false
         } else {
-            self.indexConstraints[.height]?.isActive = false
+//            self.indexConstraints[.height]?.isActive = false
             self.indexConstraints[.left]?.isActive = false
         }
         
@@ -114,5 +114,15 @@ extension ViewController: UICollectionViewDataSource {
 extension ViewController: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         return CGSize(width: (self.isIpad ? 320.0 : collectionView.frame.size.width), height: 40.0)
+    }
+}
+
+extension ViewController: UICollectionViewDelegate {
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        let alertController = UIAlertController(title: "Alert", message: "You selected a cell", preferredStyle:.alert)
+        
+        let closeAction = UIAlertAction(title: "OK", style: .default) { (action) in }
+        alertController.addAction(closeAction)
+        self.present(alertController, animated: true) {}
     }
 }

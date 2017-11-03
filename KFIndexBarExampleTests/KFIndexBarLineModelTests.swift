@@ -51,7 +51,7 @@ class KFIndexBarLineModelTests: XCTestCase {
         var lineModel = KFIndexBar.LineModel(length: 10.0)
         lineModel.outerItemSizes = [4.0, 1.0, 3.0 ]
         lineModel.innerItemSizes = [2.0, 2.0, 1.0, 2.0]
-        let inner = lineModel.calculateInnerPositions(forZoomExtent: 0.0, openBelow: 0)
+        let (inner, delta): ([CGFloat], CGFloat) = lineModel.calculateInnerPositions(forZoomExtent: 0.0, openBelow: 0)
         XCTAssertEqual(inner, [4.5, 4.5, 4.5, 4.5])
         
     }
@@ -60,7 +60,7 @@ class KFIndexBarLineModelTests: XCTestCase {
         var lineModel = KFIndexBar.LineModel(length: 10.0)
         lineModel.outerItemSizes = [4.0, 1.0, 3.0 ]
         lineModel.innerItemSizes = [2.0, 2.0, 1.0, 2.0]
-        let inner = lineModel.calculateInnerPositions(forZoomExtent: 1.0, openBelow: 0)
+        let (inner, delta): ([CGFloat], CGFloat) = lineModel.calculateInnerPositions(forZoomExtent: 1.0, openBelow: 0)
         XCTAssertEqual(inner, [1.0, 4.0, 6.5, 9.0])
         
     }
