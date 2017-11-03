@@ -175,7 +175,7 @@ class KFIndexBar: UIControl {
     //MARK: UI/geometry settings
     var font: UIFont { return UIFont.boldSystemFont(ofSize: 12.0) }
     
-    let zoomDistance: CGFloat = 20.0
+    let zoomDistance: CGFloat = 25.0
     
     /** 0.0 = zoomed out on top-level headings; 1.0 = zoomed in, showing intermediate headings */
     var _zoomExtent: CGFloat = 0.0
@@ -303,19 +303,7 @@ class KFIndexBar: UIControl {
     
     var lineModel: LineModel = LineModel(length:0.0)
     
-    let innerLabelFrameView: UIView = {
-        let v = UIView()
-        //        if #available(iOS 10.0, *) {
-        //            if let filter = CIFilter(name: "CIGaussianBlur") {
-        //                filter.setDefaults()
-        //                filter.name = "blur"
-        //                v.layer.filters = [ filter ]
-        //                v.layer.setValue(5,
-        //                               forKeyPath: "filters.blur.inputRadius")
-        //            }
-        //        }
-        return v
-    }()
+    let innerLabelFrameView = UIView()
     
     // MARK: orientation handling
     
