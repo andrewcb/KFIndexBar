@@ -40,10 +40,22 @@ class KFIndexBar: UIControl {
             let margin: CGFloat
 
             var itemSizes: [CGFloat]? = nil { didSet { self.recalculate() } }
-            var midpoints: [CGFloat]? = nil
-            var itemGap: CGFloat = 0.0
+            /// The displacement value added to all points
             var delta: CGFloat = 0.0
-            
+
+            // derived values
+            var midpoints: [CGFloat]? = nil
+            /// the point at which the first item starts
+            var startPos: CGFloat?
+            /// the point at which the last item ends
+            var endPos: CGFloat?
+            /// the space taken up between startPos and endPos
+            var extent: CGFloat = 0.0
+            /// the point equidistant between startPos and endPos
+            var midpoint: CGFloat?
+            /// the gap between items; usualy equal to margin, unless shrunk
+            var itemGap: CGFloat = 0.0
+
             init(length: CGFloat, margin: CGFloat) {
                 self.length = length
                 self.margin = margin
@@ -58,18 +70,26 @@ class KFIndexBar: UIControl {
                 guard let sizes = self.itemSizes, sizes.count >= 2 else {
                     self.midpoints = self.itemSizes.map { $0.map { _ in (self.length * 0.5)+self.delta} }
                     self.itemGap = self.margin
+                    self.startPos = (self.itemSizes?.first.map { (self.length - $0) * 0.5 } ?? 0.0) + delta
+                    self.endPos = (self.itemSizes?.first.map { (self.length + $0) * 0.5 } ?? 0.0)  + delta
+                    self.extent = self.itemSizes?.first ?? 0.0
+                    self.midpoint = self.length * 0.5 + delta
                     return
                 }
                 let totalSize =  sizes.reduce(0,+)
                 self.itemGap = min(margin, (self.length - totalSize) / CGFloat(sizes.count - 1))
-                let startPos:CGFloat = ((self.length - (totalSize + CGFloat(sizes.count-1) * itemGap)) * 0.5) + self.delta
-                self.midpoints = (sizes.reduce(([], startPos)) {  (acc:([CGFloat],CGFloat), size:CGFloat) in
+                self.startPos = ((self.length - (totalSize + CGFloat(sizes.count-1) * itemGap)) * 0.5) + self.delta
+                self.midpoints = (sizes.reduce(([], startPos!)) {  (acc:([CGFloat],CGFloat), size:CGFloat) in
                     (acc.0 + [acc.1+size*0.5], acc.1+size+itemGap)
                 }).0
+                self.endPos = midpoints?.last.flatMap { (mp) in self.itemSizes?.last.flatMap { (sz) in mp + sz*0.5 } }
+                self.extent = self.endPos! - self.startPos!
+                self.midpoint = (self.endPos! + self.startPos!) * 0.5
             }
             
-            var startPos: CGFloat? { return midpoints?.first.flatMap { (mp) in self.itemSizes?.first.flatMap { (sz) in mp - sz*0.5 } } }
-            var endPos: CGFloat? { return midpoints?.last.flatMap { (mp) in self.itemSizes?.last.flatMap { (sz) in mp + sz*0.5 } } }
+            func midpointsScaled(by factor: CGFloat, from origin: CGFloat) -> [CGFloat] {
+                return (self.midpoints ?? []).map { (($0 - origin) * factor) + origin }
+            }
             
             func trailingBoundary(after index: Int) -> CGFloat {
                 guard let midpoints = self.midpoints, let sizes = self.itemSizes else { return self.length * 0.5 }
@@ -80,6 +100,13 @@ class KFIndexBar: UIControl {
                 } else {
                     return self.length - 1.0
                 }
+            }
+            
+            func midpointGap(after index: Int) -> CGFloat {
+                guard let midpoints = self.midpoints, index < midpoints.count else { return 0.0 }
+                let pos0 = midpoints[index]
+                let pos1 = (index >= midpoints.count-1) ? self.length : midpoints[index+1]
+                return pos1 - pos0
             }
 
             func findItem(forPosition pos: CGFloat) -> Int? {
@@ -105,6 +132,9 @@ class KFIndexBar: UIControl {
             }
         }
         
+        // derived properties to do with zooming in
+        var zoomContext: (itemIndex: Int, origin: CGFloat, scale: CGFloat, offset: CGFloat)?
+        
         private mutating func recalcZoomRatio() {
             self.outerZoomRatio1 = (self.outer0.length + self.outer0.margin*2) / self.outer0.itemGap
         }
@@ -123,8 +153,16 @@ class KFIndexBar: UIControl {
             set(v) { self.inner1.itemSizes = v }
         }
         
-        mutating func setInnerItemSizes(_ sizes: [CGFloat], withDelta delta: CGFloat) {
+        mutating func setInnerItemSizes(_ sizes: [CGFloat], withDelta delta: CGFloat, openBelow index: Int) {
+            let origin = self.outer0.trailingBoundary(after: index)
             self.inner1.setSizes(sizes, andDelta: delta)
+            let δm = outer0.midpointGap(after: index)
+            self.zoomContext = (
+                itemIndex: index,
+                origin: origin,
+                scale: (self.inner1.extent + δm - self.outer0.itemGap) / δm,
+                offset: self.inner1.midpoint! - origin
+            )
         }
         
         var outerZoomRatio1: CGFloat = 1.0
@@ -136,39 +174,16 @@ class KFIndexBar: UIControl {
             self.inner1 = Line(length: length, margin: margin)
         }
         
-        func calculateOuterPositions(forZoomExtent zoomExtent: CGFloat, openBelow index: Int) -> [CGFloat] {
-            guard
-                let outerSizes = self.outer0.itemSizes,
-                let outerMidpoints = self.outer0.midpoints,
-                !outerSizes.isEmpty
-            else { return [] }
-            guard outerSizes.count > 1 else {
-                let p0_1 = -(outerSizes[0]*0.5+self.margin)
-                let d = p0_1 - outerMidpoints[0]
-                return [outerMidpoints[0] + d*zoomExtent]
-            }
-            let m1: CGFloat, c1:CGFloat
-            if index < outerSizes.count-1 {
-                let r0 = outerSizes[index]*0.5, r1 = outerSizes[index+1]*0.5
-                let p0 = outerMidpoints[index], p1 = outerMidpoints[index+1]
-                m1 = (self.length + 2*self.margin + r0 + r1) / (p1 - p0)
-                c1 = self.length + self.margin + r1 - m1*p1
-            } else { // below the end
-                let r0 = outerSizes[index-1]*0.5, r1 = outerSizes[index]*0.5
-                let p0 = outerMidpoints[index-1], p1 = outerMidpoints[index]
-                let gap = p1-p0-(r0+r1)
-                m1 = (self.length + 2*self.margin) / gap
-                c1 = self.length * m1 - self.margin
-            }
-            let m = 1.0 + (m1 - 1.0)*zoomExtent
-            let c = c1 * zoomExtent
-            return outerMidpoints.map { $0 * m + c }
+        func calculateOuterPositions(forZoomExtent zoomExtent: CGFloat) -> [CGFloat] {
+            guard let (_, origin, scale, maxOffset) = self.zoomContext else { return self.outer0.midpoints ?? [] }
+            let ratio = 1.0 + (scale-1.0)*zoomExtent
+            let offset = maxOffset * zoomExtent
+            return self.outer0.midpointsScaled(by: ratio, from: origin).map { $0+offset }
         }
         
-        func calculateInnerPositions(forZoomExtent zoomExtent: CGFloat, openBelow index: Int) -> [CGFloat] {
-            let origin = self.outer0.trailingBoundary(after: index)
-            let innerZoomExtent = zoomExtent
-            return (self.inner1.midpoints ?? []).map { origin * (1-innerZoomExtent) + $0 * innerZoomExtent }
+        func calculateInnerPositions(forZoomExtent zoomExtent: CGFloat) -> [CGFloat] {
+            guard let (_, origin, _, _) = self.zoomContext else { return [] }
+            return (self.inner1.midpoints ?? []).map { origin * (1-zoomExtent) + $0 * zoomExtent }
         }
     }
     
@@ -227,7 +242,7 @@ class KFIndexBar: UIControl {
                     let bottom = centre + halfSize
                     delta = (min(length-1, bottom+rawΔ) - centre - halfSize)
                 }
-                self.lineModel.setInnerItemSizes(sizes, withDelta: delta)
+                self.lineModel.setInnerItemSizes(sizes, withDelta: delta, openBelow: context.positionAbove)
             } else {
                 self.lineModel.innerItemSizes = nil
             }
@@ -381,7 +396,7 @@ class KFIndexBar: UIControl {
     
     override func draw(_ rect: CGRect) {
         if let topMarkerContext = self.topMarkerContext {
-            let topMids = self.lineModel.calculateOuterPositions(forZoomExtent: self.zoomExtent, openBelow: self.lastLabelIndex ?? 0)
+            let topMids = self.lineModel.calculateOuterPositions(forZoomExtent: self.zoomExtent)
             
             let r = self.selectionDimension(topMarkerContext.maxMarkerSize)*0.5
             if
@@ -422,7 +437,7 @@ class KFIndexBar: UIControl {
     
     private func placeAndFillInnerLabelView() {
         guard let zoomInContext = self.zoomInContext else { fatalError("Can't place inner label view without context") }
-        let innerMids = self.lineModel.calculateInnerPositions(forZoomExtent: self.zoomExtent, openBelow: self.lastLabelIndex ?? 0)
+        let innerMids = self.lineModel.calculateInnerPositions(forZoomExtent: self.zoomExtent)
         let curvedExtent = 1.0 - ((1.0-self.zoomExtent)*(1.0-self.zoomExtent))
         let rα = (self.lineModel.inner1.itemSizes?.first ?? 0)*0.5
         let rΩ = (self.lineModel.inner1.itemSizes?.last ?? 0)*0.5
