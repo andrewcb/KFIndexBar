@@ -353,7 +353,7 @@ class KFIndexBar: UIControl {
     
     private func setupGeometry() {
         self.isOpaque = false
-        self.lineModel.length = self.frame.size.height
+        self.lineModel.length = self.selectionDimension(self.frame.size) - 2*innerLabelViewPadding
         self.addSubview(self.innerLabelFrameView)
         self.innerLabelFrameView.frame = .zero
     }
@@ -375,7 +375,6 @@ class KFIndexBar: UIControl {
     }
     
     override var intrinsicContentSize: CGSize {
-        // FIXME
         print("intrinsicContentSize: self.bounds.size = \(self.bounds.size)")
         let breadth = (self.topMarkerContext?.maxMarkerSize.width ?? 0) * 2
         return CGSize(width: max(self.frame.size.width, breadth), height: max(self.frame.size.height, breadth))
@@ -400,7 +399,7 @@ class KFIndexBar: UIControl {
             
             let r = self.selectionDimension(topMarkerContext.maxMarkerSize)*0.5
             if
-                let start = (topMids.first.map { $0 - r - innerLabelViewPadding }),
+                let start = (topMids.first.map { $0 - r }),
                 let end = (topMids.last.map { $0 + r + 2*innerLabelViewPadding }),
                 let ctx = UIGraphicsGetCurrentContext()
             {
@@ -413,7 +412,6 @@ class KFIndexBar: UIControl {
                 ctx.setFillColor(UIColor(white: 0.95, alpha: 0.5*(1-self.zoomExtent)).cgColor)
                 ctx.closePath()
                 ctx.fillPath()
-
             }
             
             if self.isHorizontal {
@@ -493,7 +491,7 @@ class KFIndexBar: UIControl {
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        let length = self.selectionDimension(self.frame.size)
+        let length = self.selectionDimension(self.frame.size)  - 2*innerLabelViewPadding
         if length != self.lineModel.length {
             self.lineModel.length = length
             self.zoomExtent = 0.0
