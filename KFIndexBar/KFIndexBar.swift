@@ -506,6 +506,7 @@ class KFIndexBar: UIControl {
         self.topMarkers = self.dataSource?.topLevelMarkers(forIndexBar: self) ?? []
         self._zoomExtent = 0.0
         self.setNeedsLayout()
+        self.setNeedsDisplay()
     }
     
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
