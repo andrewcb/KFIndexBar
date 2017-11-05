@@ -18,6 +18,7 @@
 		44C4DB221F55976E00A92188 /* KFIndexBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB211F55976E00A92188 /* KFIndexBar.swift */; };
 		44C4DB241F572F9400A92188 /* ArrayExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB231F572F9400A92188 /* ArrayExtensions.swift */; };
 		44C4DB261F5AF32200A92188 /* KFIndexBarLineModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB251F5AF32200A92188 /* KFIndexBarLineModelTests.swift */; };
+		44D193411FAF7F82005C2BE9 /* KFIndexBarLineModelLineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D193401FAF7F82005C2BE9 /* KFIndexBarLineModelLineTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +47,7 @@
 		44C4DB211F55976E00A92188 /* KFIndexBar.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = KFIndexBar.swift; path = KFIndexBar/KFIndexBar.swift; sourceTree = "<group>"; };
 		44C4DB231F572F9400A92188 /* ArrayExtensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ArrayExtensions.swift; sourceTree = "<group>"; };
 		44C4DB251F5AF32200A92188 /* KFIndexBarLineModelTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KFIndexBarLineModelTests.swift; sourceTree = "<group>"; };
+		44D193401FAF7F82005C2BE9 /* KFIndexBarLineModelLineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KFIndexBarLineModelLineTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -107,6 +109,7 @@
 				44C4DB111F558CB000A92188 /* KFIndexBarExampleTests.swift */,
 				44C4DB131F558CB000A92188 /* Info.plist */,
 				44C4DB251F5AF32200A92188 /* KFIndexBarLineModelTests.swift */,
+				44D193401FAF7F82005C2BE9 /* KFIndexBarLineModelLineTests.swift */,
 			);
 			path = KFIndexBarExampleTests;
 			sourceTree = "<group>";
@@ -240,6 +243,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				44C4DB121F558CB000A92188 /* KFIndexBarExampleTests.swift in Sources */,
+				44D193411FAF7F82005C2BE9 /* KFIndexBarLineModelLineTests.swift in Sources */,
 				44C4DB261F5AF32200A92188 /* KFIndexBarLineModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
