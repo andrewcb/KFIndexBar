@@ -160,7 +160,7 @@ class KFIndexBar: UIControl {
             self.zoomContext = (
                 itemIndex: index,
                 origin: origin,
-                scale: (self.inner1.extent + δm - self.outer0.itemGap) / δm,
+                scale: (self.inner1.extent + δm) / δm,
                 offset: self.inner1.midpoint! - origin
             )
         }
@@ -462,10 +462,12 @@ class KFIndexBar: UIControl {
         UIGraphicsBeginImageContextWithOptions(imageSize, false, 0.0)
         defer { UIGraphicsEndImageContext() }
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        ctx.addPath(UIBezierPath(roundedRect: CGRect(x: innerLabelViewMargin, y: innerLabelViewMargin, width: imageSize.width - 2*innerLabelViewMargin, height: imageSize.height  - 2*innerLabelViewMargin), cornerRadius: innerLabelViewPadding).cgPath)
-        ctx.setFillColor(UIColor(white: 0.95, alpha: 0.5*self.zoomExtent).cgColor)
-        ctx.closePath()
-        ctx.fillPath()
+//        if self.isHorizontal {
+            ctx.addPath(UIBezierPath(roundedRect: CGRect(x: innerLabelViewMargin, y: innerLabelViewMargin, width: imageSize.width - 2*innerLabelViewMargin, height: imageSize.height  - 2*innerLabelViewMargin), cornerRadius: innerLabelViewPadding).cgPath)
+            ctx.setFillColor(UIColor(white: 0.95, alpha: 0.5*self.zoomExtent).cgColor)
+            ctx.closePath()
+            ctx.fillPath()
+//        }
 
         if self.isHorizontal {
             let ypos = (imageSize.height - zoomInContext.maxMarkerSize.height) * 0.5
