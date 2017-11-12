@@ -149,10 +149,8 @@ class KFIndexBar: UIControl {
             self.inner1 = Line(length: length, margin: margin)
         }
 
-        // When zooming in, this stores the context of the operation
-        var zoomContext: (
-            // the index of the top-level item below which zooming in is taking place
-            itemIndex: Int,
+        // When zooming in, this stores the geometric parameters
+        var zoomGeometry: (
             // the origin on the line around which the outer labels are pushed outward, and from which the inner labels emerge
             origin: CGFloat,
             // the scale by which distances are expanded at the maximum extent of zooming in
@@ -182,8 +180,7 @@ class KFIndexBar: UIControl {
             let origin = self.zoomOrigin(forItemIndex: index)
             self.inner1.setSizes(sizes, andDelta: self.innerDelta(forSizes: sizes, zoomOrigin: origin))
             let δm = outer0.midpointGap(after: index)
-            self.zoomContext = (
-                itemIndex: index,
+            self.zoomGeometry = (
                 origin: origin,
                 scale: (self.inner1.extent + δm) / δm,
                 offset: self.inner1.midpoint! - origin
@@ -191,14 +188,14 @@ class KFIndexBar: UIControl {
         }
         
         func calculateOuterPositions(forZoomExtent zoomExtent: CGFloat) -> [CGFloat] {
-            guard let (_, origin, scale, maxOffset) = self.zoomContext else { return self.outer0.midpoints ?? [] }
+            guard let (origin, scale, maxOffset) = self.zoomGeometry else { return self.outer0.midpoints ?? [] }
             let ratio = 1.0 + (scale-1.0)*zoomExtent
             let offset = maxOffset * zoomExtent
             return self.outer0.midpointsScaled(by: ratio, from: origin).map { $0+offset }
         }
         
         func calculateInnerPositions(forZoomExtent zoomExtent: CGFloat) -> [CGFloat] {
-            guard let (_, origin, _, _) = self.zoomContext else { return [] }
+            guard let (origin, _, _) = self.zoomGeometry else { return [] }
             return (self.inner1.midpoints ?? []).map { origin * (1-zoomExtent) + $0 * zoomExtent }
         }
         
@@ -230,15 +227,36 @@ class KFIndexBar: UIControl {
         }
     }
     
+    // MARK: top-level marker state
+    struct TopMarkerContext {
+        let maxMarkerSize: CGSize
+        let markerImages: [UIImage]
+    }
+    var topMarkerContext: TopMarkerContext?
+    var topMarkers: [Marker]? {
+        didSet(oldValue) {
+            self.recalcTopMarkerContextAndSizes()
+            self.setNeedsLayout()
+        }
+    }
+    
+    private func recalcTopMarkerContextAndSizes() {
+        if let topMarkers = self.topMarkers {
+            let (markerSizes, maxMarkerSize, markerImages) = self.sizesAndImages(forMarkers: topMarkers)
+            self.topMarkerContext = TopMarkerContext(maxMarkerSize: maxMarkerSize, markerImages: markerImages)
+            self.lineModel.setOuterItemSizes(markerSizes)
+        }
+    }
+    
     // MARK: state to do with zooming in
-    struct ZoomInContext {
+    struct InnerMarkerContext {
         let positionAbove: Int
         let markers: [Marker]
         let maxMarkerSize: CGSize
         let markerImages: [UIImage]
     }
     
-    var zoomInContext: ZoomInContext?
+    var innerMarkerContext: InnerMarkerContext?
     
     private func innerMarkers(underTopMarker markerIndex: Int) -> [Marker]? {
         guard
@@ -249,13 +267,13 @@ class KFIndexBar: UIControl {
         return self.dataSource?.indexBar(self, markersBetween: offsetFrom, and: offsetTo)
     }
     
-    func initialiseZoomIn(underTopIndex index: Int) {
+    func initialiseInnerMarkers(underTopIndex index: Int) {
         guard
             let innerMarkers = self.innerMarkers(underTopMarker: index),
-            self.zoomInContext == nil || self.zoomInContext?.positionAbove != index
+            self.innerMarkerContext == nil || self.innerMarkerContext?.positionAbove != index
         else { return }
         let (markerSizes, maxMarkerSize, markerImages) = self.sizesAndImages(forMarkers: innerMarkers)
-        self.zoomInContext = ZoomInContext(positionAbove: index, markers: innerMarkers, maxMarkerSize: maxMarkerSize, markerImages: markerImages)
+        self.innerMarkerContext = InnerMarkerContext(positionAbove: index, markers: innerMarkers, maxMarkerSize: maxMarkerSize, markerImages: markerImages)
         self.lineModel.setInnerItemSizes(markerSizes, openBelow: index)
     }
     
@@ -285,26 +303,6 @@ class KFIndexBar: UIControl {
             markerSizes.map(sizeFunction),
             maxMarkerSize,
             markerImages)
-    }
-    
-    struct TopMarkerContext {
-        let maxMarkerSize: CGSize
-        let markerImages: [UIImage]
-    }
-    var topMarkerContext: TopMarkerContext?
-    var topMarkers: [Marker]? {
-        didSet(oldValue) {
-            self.recalcTopMarkerContextAndSizes()
-            self.setNeedsLayout()
-        }
-    }
-
-    private func recalcTopMarkerContextAndSizes() {
-        if let topMarkers = self.topMarkers {
-            let (markerSizes, maxMarkerSize, markerImages) = self.sizesAndImages(forMarkers: topMarkers)
-            self.topMarkerContext = TopMarkerContext(maxMarkerSize: maxMarkerSize, markerImages: markerImages)
-            self.lineModel.setOuterItemSizes(markerSizes)
-        }
     }
     
     // ---- draw animation state
@@ -437,7 +435,7 @@ class KFIndexBar: UIControl {
     }
     
     private func placeAndFillInnerLabelView() {
-        guard let zoomInContext = self.zoomInContext else { fatalError("Can't place inner label view without context") }
+        guard let zoomInContext = self.innerMarkerContext else { fatalError("Can't place inner label view without context") }
         let innerMids = self.lineModel.calculateInnerPositions(forZoomExtent: self.zoomExtent)
         let curvedExtent = 1.0 - ((1.0-self.zoomExtent)*(1.0-self.zoomExtent))
         let rα = (self.lineModel.inner1.itemSizes?.first ?? 0)*0.5
@@ -543,16 +541,16 @@ class KFIndexBar: UIControl {
             }
             if zc < 0.0 {
                 if let index = self.lastLabelIndex {
-                    self.initialiseZoomIn(underTopIndex: index)
+                    self.initialiseInnerMarkers(underTopIndex: index)
                 }
             }
         }
-        if self.snappedToZoomIn, let zoomInState = self.zoomInContext, let index = innerLabelIndex(forPosition: sc) {
+        if self.snappedToZoomIn, let zoomInState = self.innerMarkerContext, let index = innerLabelIndex(forPosition: sc) {
             let marker = zoomInState.markers[index]
             self._currentOffset = marker.offset
         }
         
-        let canZoomIn = !(self.zoomInContext?.markers.isEmpty ?? true)
+        let canZoomIn = !(self.innerMarkerContext?.markers.isEmpty ?? true)
         self.zoomExtent = canZoomIn ? (self.snappedToZoomIn ? 1.0 : min(1.0, max(0.0, -(zc / self.zoomDistance)))) : 0.0
         return true
     }
