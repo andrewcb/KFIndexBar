@@ -9,19 +9,27 @@
 import UIKit
 
 protocol KFIndexBarDataSource {
+    /** Return the markers shown in the zoomed-out state. */
     func topLevelMarkers(forIndexBar: KFIndexBar) -> [KFIndexBar.Marker]
     
+    /** Return a list of all the second-level markers between two points */
     func indexBar(_ indexBar: KFIndexBar, markersBetween start: Int, and end: Int) -> [KFIndexBar.Marker]
 }
 
 class KFIndexBar: UIControl {
+    
+    /** A Marker represents a label on the index bar, and the offset it points to. */
     struct Marker {
+        /** The text displayed on the index bar; typically 1-2 characters long. */
         let label: String
+        /** The offset into the list of displayed items that the label points to. */
         let offset: Int
     }
     
+    /** The source of marker data; KFIndexBar will query this when `reloadData()` is called, and when the user zooms in. */
     var dataSource: KFIndexBarDataSource? = nil
     
+    /** The offset in the list of displayed items of the parent collection view that the last selected label on the index bar points to. */
     var currentOffset: Int { return self._currentOffset }
     
     private var _currentOffset: Int = 0 {
@@ -34,7 +42,8 @@ class KFIndexBar: UIControl {
     
     // An object modelling the placement of labels on a line, and the zooming from an outer set of labels to an inner one
     struct LineModel {
-        // an individual line of items, with sizes and midpoints; the line model maintains two: an outer and an inner one
+        
+        // A `Line` is an individual line of items, with a length. It is given a list of sizes and a delta value to shift positions by and, from this, calculates item midpoints and global values (such as the start and end of all items, the total span occupied by items, and the global midpoint of this span).
         struct Line {
             var length: CGFloat { didSet { self.recalculate() } }
             let margin: CGFloat
@@ -122,40 +131,56 @@ class KFIndexBar: UIControl {
             }
         }
         
+        // the `LineModel` maintains two `Line`s: one representing the outer markers, in their normal, zoomed-out state, and one representing the inner markers, when fully zoomed in (whose values are only valid when a zooming operation is taking place, as the markers will vary). Interpolating between these two is the `LineModel`'s responsibility.
         var outer0: Line
         var inner1: Line
         
         var length: CGFloat {
-            didSet {
-                self.outer0.length = length
-                self.inner1.length = length
+            get {
+                return self.outer0.length
             }
-        }
-        
-        // derived properties to do with zooming in
-        var zoomContext: (itemIndex: Int, origin: CGFloat, scale: CGFloat, offset: CGFloat)?
-        
-        private mutating func recalcZoomRatio() {
-            self.outerZoomRatio1 = (self.outer0.length + self.outer0.margin*2) / self.outer0.itemGap
-        }
-        // The distance between the nearest outer label, when moved out of the frame, and the frame
-        let margin: CGFloat
-        
-        var outerItemSizes: [CGFloat]? {
-            get { return self.outer0.itemSizes }
             set(v) {
-                self.outer0.itemSizes = v
-                self.recalcZoomRatio()
+                self.outer0.length = v
+                self.inner1.length = v
             }
         }
-        var innerItemSizes: [CGFloat]? {
-            get { return self.inner1.itemSizes }
-            set(v) { self.inner1.itemSizes = v }
+        init(length: CGFloat, margin: CGFloat = 10.0) {
+            self.outer0 = Line(length: length, margin: margin)
+            self.inner1 = Line(length: length, margin: margin)
+        }
+
+        // When zooming in, this stores the context of the operation
+        var zoomContext: (
+            // the index of the top-level item below which zooming in is taking place
+            itemIndex: Int,
+            // the origin on the line around which the outer labels are pushed outward, and from which the inner labels emerge
+            origin: CGFloat,
+            // the scale by which distances are expanded at the maximum extent of zooming in
+            scale: CGFloat,
+            // the offset added to items at the maximum extent of zooming in; it is scaled proportionally with zoom extent
+            offset: CGFloat
+        )?
+        
+        mutating func setOuterItemSizes(_ sizes: [CGFloat]) {
+            self.outer0.itemSizes = sizes
         }
         
-        mutating func setInnerItemSizes(_ sizes: [CGFloat], withDelta delta: CGFloat, openBelow index: Int) {
-            let origin = self.outer0.trailingBoundary(after: index)
-            self.inner1.setSizes(sizes, andDelta: delta)
+        func innerDelta(forSizes sizes: [CGFloat], zoomOrigin: CGFloat) -> CGFloat {
+            let centre = self.length * 0.5
+            let rawΔ = zoomOrigin - centre
+            let halfSize = (sizes.isEmpty ? 0.0 : sizes.reduce(0,+) + (CGFloat(sizes.count-1)*self.inner1.itemGap)) * 0.5
+            if rawΔ < 0.0 {
+                let top = centre - halfSize
+                return max(0.0, top+rawΔ) - top
+            } else {
+                let bottom = centre + halfSize
+                return min(length-1, bottom+rawΔ) - bottom
+            }
+        }
+        
+        mutating func setInnerItemSizes(_ sizes: [CGFloat], openBelow index: Int) {
+            let origin = self.zoomOrigin(forItemIndex: index)
+            self.inner1.setSizes(sizes, andDelta: self.innerDelta(forSizes: sizes, zoomOrigin: origin))
             let δm = outer0.midpointGap(after: index)
             self.zoomContext = (
                 itemIndex: index,
@@ -163,15 +188,6 @@ class KFIndexBar: UIControl {
                 scale: (self.inner1.extent + δm) / δm,
                 offset: self.inner1.midpoint! - origin
             )
-        }
-        
-        var outerZoomRatio1: CGFloat = 1.0
-        
-        init(length: CGFloat, margin: CGFloat = 10.0) {
-            self.length = length
-            self.margin = margin
-            self.outer0 = Line(length: length, margin: margin)
-            self.inner1 = Line(length: length, margin: margin)
         }
         
         func calculateOuterPositions(forZoomExtent zoomExtent: CGFloat) -> [CGFloat] {
@@ -185,81 +201,74 @@ class KFIndexBar: UIControl {
             guard let (_, origin, _, _) = self.zoomContext else { return [] }
             return (self.inner1.midpoints ?? []).map { origin * (1-zoomExtent) + $0 * zoomExtent }
         }
+        
+        func zoomOrigin(forItemIndex index: Int) -> CGFloat {
+            return self.outer0.trailingBoundary(after: index)
+        }
     }
     
-    //MARK: UI/geometry settings
+    // MARK: UI/geometry settings
     var font: UIFont { return UIFont.boldSystemFont(ofSize: 12.0) }
     
     let zoomDistance: CGFloat = 25.0
+    let innerLabelViewPadding: CGFloat = 4.0
+    let innerLabelViewMargin: CGFloat = 4.0
     
     /** 0.0 = zoomed out on top-level headings; 1.0 = zoomed in, showing intermediate headings */
     var _zoomExtent: CGFloat = 0.0
+    var snappedToZoomIn: Bool = false
     var zoomExtent: CGFloat {
         get { return self.snappedToZoomIn ? 1.0 : self._zoomExtent }
         set(v) {
             self._zoomExtent = v
             if v >= 1.0 { self.snappedToZoomIn = true }
             self.setNeedsDisplay()
-            if v == 0.0 {
-                self.innerLabelFrameView.isHidden = true
-            } else {
-                self.innerLabelFrameView.isHidden = false
+            self.innerLabelFrameView.isHidden = (v == 0.0)
+            if v > 0.0 {
                 self.placeAndFillInnerLabelView()
             }
         }
     }
-    var snappedToZoomIn: Bool = false
     
-    // touch state: tracking zoomed in points
+    // MARK: state to do with zooming in
     struct ZoomInContext {
         let positionAbove: Int
         let markers: [Marker]
-        let markerSizes: [CGFloat]
         let maxMarkerSize: CGSize
         let markerImages: [UIImage]
-        
-        init(positionAbove: Int, markers: [Marker], font: UIFont, labelColour: UIColor, isHorizontal: Bool) {
-            self.positionAbove = positionAbove
-            self.markers = markers
-            (self.markerSizes, self.maxMarkerSize, self.markerImages) = KFIndexBar.sizesAndImages(forMarkers: markers, withFont: font, labelColour: labelColour, isHorizontal: isHorizontal)
-        }
     }
     
-    var zoomInContext: ZoomInContext? {
-        didSet {
-            if let context = self.zoomInContext {
-                let sizes = context.markerSizes
-                let length = self.lineModel.length
-                let centre = length * 0.5
-                let zoomOrigin = self.lineModel.outer0.trailingBoundary(after: context.positionAbove)
-                let rawΔ = zoomOrigin - centre
-                let halfSize = (sizes.isEmpty ? 0.0 : sizes.reduce(0,+) + (CGFloat(sizes.count-1)*self.lineModel.inner1.itemGap)) * 0.5
-                let delta: CGFloat
-                if zoomOrigin < centre {
-                    let top = centre - halfSize
-                    delta = (max(0.0, top+rawΔ) - centre + halfSize)
-                } else {
-                    let bottom = centre + halfSize
-                    delta = (min(length-1, bottom+rawΔ) - centre - halfSize)
-                }
-                self.lineModel.setInnerItemSizes(sizes, withDelta: delta, openBelow: context.positionAbove)
-            } else {
-                self.lineModel.innerItemSizes = nil
-            }
-        }
+    var zoomInContext: ZoomInContext?
+    
+    private func innerMarkers(underTopMarker markerIndex: Int) -> [Marker]? {
+        guard
+            let topMarkers = self.topMarkers
+            else { return nil }
+        let offsetFrom = topMarkers[markerIndex].offset
+        let offsetTo = markerIndex<topMarkers.count-1 ? topMarkers[markerIndex+1].offset : Int.max
+        return self.dataSource?.indexBar(self, markersBetween: offsetFrom, and: offsetTo)
     }
     
-    private class func sizesAndImages(forMarkers markers: [Marker], withFont font: UIFont, labelColour: UIColor, isHorizontal: Bool) -> ([CGFloat], CGSize, [UIImage]) {
+    func initialiseZoomIn(underTopIndex index: Int) {
+        guard
+            let innerMarkers = self.innerMarkers(underTopMarker: index),
+            self.zoomInContext == nil || self.zoomInContext?.positionAbove != index
+        else { return }
+        let (markerSizes, maxMarkerSize, markerImages) = self.sizesAndImages(forMarkers: innerMarkers)
+        self.zoomInContext = ZoomInContext(positionAbove: index, markers: innerMarkers, maxMarkerSize: maxMarkerSize, markerImages: markerImages)
+        self.lineModel.setInnerItemSizes(markerSizes, openBelow: index)
+    }
+    
+    private func sizesAndImages(forMarkers markers: [Marker]) -> ([CGFloat], CGSize, [UIImage]) {
         let everywhere = CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
         let attribs: [NSAttributedStringKey:Any] = [
-            .font: font,
-            .foregroundColor: labelColour
+            .font: self.font,
+            .foregroundColor: self.tintColor
         ]
         let markerSizes = markers.map { $0.label.boundingRect(with: everywhere, options: .usesLineFragmentOrigin, attributes: attribs, context: nil).size }
         let maxMarkerSize = CGSize(
             width: ceil(markerSizes.map {$0.width}.max() ?? 0.0),
             height: ceil(markerSizes.map {$0.height}.max() ?? 0.0))
-        
         
         let markerImages = zip(markers, markerSizes).map { arg -> UIImage in
             let (marker, msize) = arg
@@ -271,7 +280,7 @@ class KFIndexBar: UIControl {
                 attributes:attribs, context: nil)
             return UIGraphicsGetImageFromCurrentImageContext()!
         }
-        let sizeFunction = isHorizontal ? { (size: CGSize) in size.width } : { (size: CGSize) in size.height }
+        let sizeFunction: ((CGSize)->CGFloat) = isHorizontal ? { $0.width } : { $0.height }
         return (
             markerSizes.map(sizeFunction),
             maxMarkerSize,
@@ -292,9 +301,9 @@ class KFIndexBar: UIControl {
 
     private func recalcTopMarkerContextAndSizes() {
         if let topMarkers = self.topMarkers {
-            let (markerSizes, maxMarkerSize, markerImages) = KFIndexBar.sizesAndImages(forMarkers: topMarkers, withFont: self.font, labelColour: self.tintColor, isHorizontal: self.isHorizontal)
+            let (markerSizes, maxMarkerSize, markerImages) = self.sizesAndImages(forMarkers: topMarkers)
             self.topMarkerContext = TopMarkerContext(maxMarkerSize: maxMarkerSize, markerImages: markerImages)
-            self.lineModel.outerItemSizes = markerSizes
+            self.lineModel.setOuterItemSizes(markerSizes)
         }
     }
     
@@ -304,20 +313,20 @@ class KFIndexBar: UIControl {
     }
     var animationState: AnimationState? = nil {
         didSet {
-            if self.displayLink == nil {
-                self.displayLink = CADisplayLink(target: self, selector: #selector(animationTick))
-            }
             if self.animationState != nil {
+                if self.displayLink == nil {
+                    self.displayLink = CADisplayLink(target: self, selector: #selector(animationTick))
+                }
                 self.lastFrameTime = CACurrentMediaTime()
-                self.displayLink.add(to: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
+                self.displayLink?.add(to: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
             } else {
-                self.displayLink.invalidate()
+                self.displayLink?.invalidate()
                 self.displayLink = nil
             }
         }
     }
     var lastFrameTime: CFTimeInterval? = nil
-    var displayLink: CADisplayLink!// = CADisplayLink(target: self, selector: #selector(animationTick(:)))
+    var displayLink: CADisplayLink?
     
     @objc func animationTick(_ displayLink: CADisplayLink) {
         guard
@@ -350,7 +359,6 @@ class KFIndexBar: UIControl {
     
     // MARK: ----------------
     
-    
     private func setupGeometry() {
         self.isOpaque = false
         self.lineModel.length = self.selectionDimension(self.frame.size) - 2*innerLabelViewPadding
@@ -375,7 +383,6 @@ class KFIndexBar: UIControl {
     }
     
     override var intrinsicContentSize: CGSize {
-        print("intrinsicContentSize: self.bounds.size = \(self.bounds.size)")
         let breadth = (self.topMarkerContext?.maxMarkerSize.width ?? 0) * 2
         return CGSize(width: max(self.frame.size.width, breadth), height: max(self.frame.size.height, breadth))
     }
@@ -400,7 +407,7 @@ class KFIndexBar: UIControl {
             let r = self.selectionDimension(topMarkerContext.maxMarkerSize)*0.5
             if
                 let start = (topMids.first.map { $0 - r }),
-                let end = (topMids.last.map { $0 + r + 2*innerLabelViewPadding }),
+                let end = (topMids.last.map { $0 + r }),
                 let ctx = UIGraphicsGetCurrentContext()
             {
                 let ext = end-start
@@ -409,7 +416,7 @@ class KFIndexBar: UIControl {
                 let width = self.isHorizontal ? ext : self.frame.size.width
                 let height = self.isHorizontal ? self.frame.size.height : ext
                 ctx.addPath(UIBezierPath(roundedRect: CGRect(x: x, y: y, width: width, height: height), cornerRadius: innerLabelViewPadding).cgPath)
-                ctx.setFillColor(UIColor(white: 0.95, alpha: 0.5*(1-self.zoomExtent)).cgColor)
+                ctx.setFillColor((self.isHighlighted ? UIColor(white: 0.92, alpha: 0.5*(1-self.zoomExtent)) : (self.backgroundColor ?? UIColor.white).withAlphaComponent(0.5)).cgColor)
                 ctx.closePath()
                 ctx.fillPath()
             }
@@ -428,10 +435,6 @@ class KFIndexBar: UIControl {
             }
         }
     }
-    
-    
-    let innerLabelViewPadding: CGFloat = 4.0
-    let innerLabelViewMargin: CGFloat = 4.0
     
     private func placeAndFillInnerLabelView() {
         guard let zoomInContext = self.zoomInContext else { fatalError("Can't place inner label view without context") }
@@ -462,12 +465,10 @@ class KFIndexBar: UIControl {
         UIGraphicsBeginImageContextWithOptions(imageSize, false, 0.0)
         defer { UIGraphicsEndImageContext() }
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
-//        if self.isHorizontal {
-            ctx.addPath(UIBezierPath(roundedRect: CGRect(x: innerLabelViewMargin, y: innerLabelViewMargin, width: imageSize.width - 2*innerLabelViewMargin, height: imageSize.height  - 2*innerLabelViewMargin), cornerRadius: innerLabelViewPadding).cgPath)
-            ctx.setFillColor(UIColor(white: 0.95, alpha: 0.5*self.zoomExtent).cgColor)
-            ctx.closePath()
-            ctx.fillPath()
-//        }
+        ctx.addPath(UIBezierPath(roundedRect: CGRect(x: innerLabelViewMargin, y: innerLabelViewMargin, width: imageSize.width - 2*innerLabelViewMargin, height: imageSize.height  - 2*innerLabelViewMargin), cornerRadius: innerLabelViewPadding).cgPath)
+        ctx.setFillColor(UIColor(white: 0.92, alpha: 0.5*self.zoomExtent).cgColor)
+        ctx.closePath()
+        ctx.fillPath()
 
         if self.isHorizontal {
             let ypos = (imageSize.height - zoomInContext.maxMarkerSize.height) * 0.5
@@ -509,6 +510,15 @@ class KFIndexBar: UIControl {
         self.setNeedsDisplay()
     }
     
+    override func tintColorDidChange() {
+        super.tintColorDidChange()
+        let color = (self.tintAdjustmentMode == .dimmed ? UIColor.lightGray : self.tintColor)
+        self.recalcTopMarkerContextAndSizes()
+        self.setNeedsDisplay()
+    }
+
+    //MARK: event tracking
+    
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         self._zoomExtent = 0.0
         self.snappedToZoomIn = false
@@ -532,10 +542,8 @@ class KFIndexBar: UIControl {
                 }
             }
             if zc < 0.0 {
-                if let index = self.lastLabelIndex, let topMarkers = self.topMarkers, let dataSource = self.dataSource, self.zoomInContext == nil || self.zoomInContext?.positionAbove != index {
-                    let offsetFrom = topMarkers[index].offset
-                    let offsetTo = index<topMarkers.count-1 ? topMarkers[index+1].offset : Int.max
-                    self.zoomInContext = ZoomInContext(positionAbove: index, markers: dataSource.indexBar(self, markersBetween: offsetFrom, and: offsetTo), font: self.font, labelColour: self.tintColor, isHorizontal: self.isHorizontal)
+                if let index = self.lastLabelIndex {
+                    self.initialiseZoomIn(underTopIndex: index)
                 }
             }
         }
@@ -553,11 +561,9 @@ class KFIndexBar: UIControl {
         self.animationState = .snapZoomOut(amountPerSecond: 3.5)
     }
     
-    override func tintColorDidChange() {
-        super.tintColorDidChange()
-        let color = (self.tintAdjustmentMode == .dimmed ? UIColor.lightGray : self.tintColor)
-        self.recalcTopMarkerContextAndSizes()
-        self.setNeedsDisplay()
+    override func cancelTracking(with event: UIEvent?) {
+        self.animationState = .snapZoomOut(amountPerSecond: 3.5)
     }
+    
 }
 
