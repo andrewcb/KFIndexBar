@@ -235,7 +235,58 @@ class KFIndexBar: UIControl {
     let innerLabelViewPadding: CGFloat = 4.0
     let innerLabelViewMargin: CGFloat = 4.0
     
-    /** 0.0 = zoomed out on top-level headings; 1.0 = zoomed in, showing intermediate headings */
+    // MARK: lifecycle and UIKit interfacing
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.setupGeometry()
+    }
+    
+    required init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+    }
+    
+    override func awakeFromNib() {
+        super.awakeFromNib()
+        self.setupGeometry()
+    }
+    
+    override var intrinsicContentSize: CGSize {
+        let breadth = (self.topMarkerContext?.maxMarkerSize.width ?? 0) * 2
+        return CGSize(width: max(self.frame.size.width, breadth), height: max(self.frame.size.height, breadth))
+    }
+    
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let length = self.selectionDimension(self.frame.size)  - 2*innerLabelViewPadding
+        if length != self.lineModel.length {
+            self.lineModel.length = length
+            self.zoomExtent = 0.0
+            self.recalcTopMarkerContextAndSizes()
+            self.setNeedsDisplay()
+        }
+    }
+    
+    override func tintColorDidChange() {
+        super.tintColorDidChange()
+        self.recalcTopMarkerContextAndSizes()
+        self.setNeedsDisplay()
+    }
+    
+    // MARK: -------- UI elements
+    
+    let innerLabelFrameView = UIView()
+    
+    private func setupGeometry() {
+        self.isOpaque = false
+        self.lineModel.length = self.selectionDimension(self.frame.size) - 2*innerLabelViewPadding
+        self.addSubview(self.innerLabelFrameView)
+        self.innerLabelFrameView.frame = .zero
+    }
+    
+    // MARK: -------- Current interaction state and working store
+    
+    // 0.0 = zoomed out on top-level headings; 1.0 = zoomed in, showing intermediate headings
     var _zoomExtent: CGFloat = 0.0
     var snappedToZoomIn: Bool = false
     var zoomExtent: CGFloat {
@@ -251,7 +302,7 @@ class KFIndexBar: UIControl {
         }
     }
     
-    // MARK: top-level marker state
+    // top-level marker working state
     struct TopMarkerContext {
         let maxMarkerSize: CGSize
         let markerImages: [UIImage]
@@ -301,35 +352,7 @@ class KFIndexBar: UIControl {
         self.lineModel.setInnerItemSizes(markerSizes, openBelow: index)
     }
     
-    private func sizesAndImages(forMarkers markers: [Marker]) -> ([CGFloat], CGSize, [UIImage]) {
-        let everywhere = CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
-        let attribs: [NSAttributedStringKey:Any] = [
-            .font: self.font,
-            .foregroundColor: self.tintColor
-        ]
-        let markerSizes = markers.map { $0.label.boundingRect(with: everywhere, options: .usesLineFragmentOrigin, attributes: attribs, context: nil).size }
-        let maxMarkerSize = CGSize(
-            width: ceil(markerSizes.map {$0.width}.max() ?? 0.0),
-            height: ceil(markerSizes.map {$0.height}.max() ?? 0.0))
-        
-        let markerImages = zip(markers, markerSizes).map { arg -> UIImage in
-            let (marker, msize) = arg
-            UIGraphicsBeginImageContextWithOptions(CGSize(width: maxMarkerSize.width, height: maxMarkerSize.height), false, 0.0)
-            defer { UIGraphicsEndImageContext() }
-            marker.label.draw(
-                with:CGRect(origin: CGPoint(x:(maxMarkerSize.width-msize.width)*0.5, y:(maxMarkerSize.height-msize.height)*0.5), size: msize),
-                options: .usesLineFragmentOrigin,
-                attributes:attribs, context: nil)
-            return UIGraphicsGetImageFromCurrentImageContext()!
-        }
-        let sizeFunction: ((CGSize)->CGFloat) = isHorizontal ? { $0.width } : { $0.height }
-        return (
-            markerSizes.map(sizeFunction),
-            maxMarkerSize,
-            markerImages)
-    }
-    
-    // ---- draw animation state
+    // MARK: The snap-shut animation mechanism. (As labels are drawn, we cannot use CoreAnimation for this.)
     enum AnimationState {
         case snapZoomOut(amountPerSecond: CGFloat)
     }
@@ -367,11 +390,11 @@ class KFIndexBar: UIControl {
         }
     }
     
+    // MARK: --------
+    
     var lineModel: LineModel = LineModel(length:0.0)
     
-    let innerLabelFrameView = UIView()
-    
-    // MARK: orientation handling
+    // MARK: -------- orientation handling
     
     private var isHorizontal: Bool { return self.frame.size.width > self.frame.size.height }
     private func selectionCoord(_ point: CGPoint) -> CGFloat { return self.isHorizontal ? point.x : point.y }
@@ -379,35 +402,7 @@ class KFIndexBar: UIControl {
     private func selectionDimension(_ size: CGSize) -> CGFloat { return self.isHorizontal ? size.width : size.height }
     private func zoomingDimension(_ size: CGSize) -> CGFloat { return self.isHorizontal ? size.height : size.width }
     
-    // MARK: ----------------
-    
-    private func setupGeometry() {
-        self.isOpaque = false
-        self.lineModel.length = self.selectionDimension(self.frame.size) - 2*innerLabelViewPadding
-        self.addSubview(self.innerLabelFrameView)
-        self.innerLabelFrameView.frame = .zero
-    }
-    
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        self.setupGeometry()
-    }
-    
-    required init?(coder aDecoder: NSCoder) {
-        super.init(coder: aDecoder)
-    }
-    
-    override func awakeFromNib() {
-        super.awakeFromNib()
-        self.setupGeometry()
-    }
-    
-    override var intrinsicContentSize: CGSize {
-        let breadth = (self.topMarkerContext?.maxMarkerSize.width ?? 0) * 2
-        return CGSize(width: max(self.frame.size.width, breadth), height: max(self.frame.size.height, breadth))
-    }
-    
-    var lastLabelIndex: Int? = nil
+    // MARK: -------
     
     func topLabelIndex(forPosition pos: CGFloat) -> Int? {
         return self.lineModel.outer0.findItem(forPosition:pos)
@@ -417,6 +412,7 @@ class KFIndexBar: UIControl {
         return self.lineModel.inner1.findItem(forPosition:pos)
     }
     
+    // MARK: -------- Drawing and image rendering
     override func draw(_ rect: CGRect) {
         if let topMarkerContext = self.topMarkerContext {
             let topMids = self.lineModel.calculateOuterPositions(forZoomExtent: self.zoomExtent)
@@ -508,18 +504,37 @@ class KFIndexBar: UIControl {
         // CoreImage blurring is far too slow here; most of the work seems in communicating with the GPU, from CIContext.createCGImage(...)
         self.innerLabelFrameView.layer.contents = image?.cgImage
     }
-    
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let length = self.selectionDimension(self.frame.size)  - 2*innerLabelViewPadding
-        if length != self.lineModel.length {
-            self.lineModel.length = length
-            self.zoomExtent = 0.0
-            self.recalcTopMarkerContextAndSizes()
-            self.setNeedsDisplay()
+
+    private func sizesAndImages(forMarkers markers: [Marker]) -> ([CGFloat], CGSize, [UIImage]) {
+        let everywhere = CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        let attribs: [NSAttributedStringKey:Any] = [
+            .font: self.font,
+            .foregroundColor: self.tintColor
+        ]
+        let markerSizes = markers.map { $0.label.boundingRect(with: everywhere, options: .usesLineFragmentOrigin, attributes: attribs, context: nil).size }
+        let maxMarkerSize = CGSize(
+            width: ceil(markerSizes.map {$0.width}.max() ?? 0.0),
+            height: ceil(markerSizes.map {$0.height}.max() ?? 0.0))
+        
+        let markerImages = zip(markers, markerSizes).map { arg -> UIImage in
+            let (marker, msize) = arg
+            UIGraphicsBeginImageContextWithOptions(CGSize(width: maxMarkerSize.width, height: maxMarkerSize.height), false, 0.0)
+            defer { UIGraphicsEndImageContext() }
+            marker.label.draw(
+                with:CGRect(origin: CGPoint(x:(maxMarkerSize.width-msize.width)*0.5, y:(maxMarkerSize.height-msize.height)*0.5), size: msize),
+                options: .usesLineFragmentOrigin,
+                attributes:attribs, context: nil)
+            return UIGraphicsGetImageFromCurrentImageContext()!
         }
+        let sizeFunction: ((CGSize)->CGFloat) = isHorizontal ? { $0.width } : { $0.height }
+        return (
+            markerSizes.map(sizeFunction),
+            maxMarkerSize,
+            markerImages)
     }
     
+    //MARK: --------
+
     func reloadData() {
         self.topMarkers = self.dataSource?.topLevelMarkers(forIndexBar: self) ?? []
         self._zoomExtent = 0.0
@@ -527,21 +542,14 @@ class KFIndexBar: UIControl {
         self.setNeedsDisplay()
     }
     
-    override func tintColorDidChange() {
-        super.tintColorDidChange()
-        self.recalcTopMarkerContextAndSizes()
-        self.setNeedsDisplay()
-    }
-
-    //MARK: event tracking
+    //MARK: ----- event tracking
     
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         self._zoomExtent = 0.0
         self.snappedToZoomIn = false
         let loc = touch.location(in: self)
         let sc = self.selectionCoord(loc)
-        self.lastLabelIndex = topLabelIndex(forPosition: sc)
-        if let index = self.lastLabelIndex, let offset = self.topMarkers?[index].offset {
+        if let index = self.topLabelIndex(forPosition: sc), let offset = self.topMarkers?[index].offset {
             self._currentOffset = offset
         }
         return true
@@ -551,15 +559,12 @@ class KFIndexBar: UIControl {
         let loc = touch.location(in: self)
         let zc = self.zoomingCoord(loc), sc = self.selectionCoord(loc)
         if !self.snappedToZoomIn {
-            if zc >= 0.0 {
-                self.lastLabelIndex = topLabelIndex(forPosition: sc)
-                if let index = self.lastLabelIndex, let offset = self.topMarkers?[index].offset {
+            if let topIndex = self.topLabelIndex(forPosition: sc) {
+                if zc >= 0.0, let offset = self.topMarkers?[topIndex].offset {
                     self._currentOffset = offset
                 }
-            }
-            if zc < 0.0 {
-                if let index = self.lastLabelIndex {
-                    self.initialiseInnerMarkers(underTopIndex: index)
+                if zc < 0.0 {
+                    self.initialiseInnerMarkers(underTopIndex: topIndex)
                 }
             }
         }
@@ -580,6 +585,4 @@ class KFIndexBar: UIControl {
     override func cancelTracking(with event: UIEvent?) {
         self.animationState = .snapZoomOut(amountPerSecond: 3.5)
     }
-    
 }
-
