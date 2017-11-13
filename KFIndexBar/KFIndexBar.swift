@@ -50,7 +50,11 @@ class KFIndexBar: UIControl {
 
             var itemSizes: [CGFloat]? = nil { didSet { self.recalculate() } }
             /// The displacement value added to all points
-            var delta: CGFloat = 0.0
+            var delta: CGFloat = 0.0 {
+                didSet {
+                    self.recalculate()
+                }
+            }
 
             // derived values
             var midpoints: [CGFloat]? = nil
@@ -70,9 +74,23 @@ class KFIndexBar: UIControl {
                 self.margin = margin
             }
             
-            mutating func setSizes(_ sizes: [CGFloat], andDelta delta: CGFloat) {
-                self.delta = delta
+            mutating func setSizes(_ sizes: [CGFloat]) {
                 self.itemSizes = sizes
+            }
+            
+            /** Calculate the offset to adjust positions by, which is as close to being centred around `zoomOrigin` as possible without the outermost elements going out of the line's space */
+            mutating func calculateDelta(forZoomOrigin zoomOrigin: CGFloat) {
+                let centre = self.length * 0.5
+                let rawΔ = zoomOrigin - centre
+                let sizes = self.itemSizes ?? []
+                let halfSize = (sizes.isEmpty ? 0.0 : sizes.reduce(0,+) + (CGFloat(sizes.count-1)*self.itemGap)) * 0.5
+                if rawΔ < 0.0 {
+                    let top = centre - halfSize
+                    self.delta = max(0.0, top+rawΔ) - top
+                } else {
+                    let bottom = centre + halfSize
+                    self.delta = min(length-1, bottom+rawΔ) - bottom
+                }
             }
             
             mutating func recalculate() {
@@ -121,13 +139,14 @@ class KFIndexBar: UIControl {
             func findItem(forPosition pos: CGFloat) -> Int? {
                 guard
                     let midpoints = self.midpoints,
+                    !midpoints.isEmpty,
                     let sizes = self.itemSizes,
                     let startPos = self.startPos,
                     let endPos = self.endPos,
                     pos >= startPos,
                     pos <= endPos
                     else { return nil }
-                return (zip(midpoints, sizes).enumerated().first { ($0.element.0 - ($0.element.1*0.5)) >= pos }?.offset).map { $0 - 1 } ?? (midpoints.count-1)
+                return (zip(midpoints, sizes).enumerated().first { ($0.element.0 - ($0.element.1*0.5)) >= pos }?.offset).map { $0 - 1 }.flatMap { $0>=0 ? $0 : nil } ?? (midpoints.count-1)
             }
         }
         
@@ -178,7 +197,8 @@ class KFIndexBar: UIControl {
         
         mutating func setInnerItemSizes(_ sizes: [CGFloat], openBelow index: Int) {
             let origin = self.zoomOrigin(forItemIndex: index)
-            self.inner1.setSizes(sizes, andDelta: self.innerDelta(forSizes: sizes, zoomOrigin: origin))
+            self.inner1.setSizes(sizes)
+            self.inner1.calculateDelta(forZoomOrigin: origin)
             let δm = outer0.midpointGap(after: index)
             self.zoomGeometry = (
                 origin: origin,
@@ -371,7 +391,6 @@ class KFIndexBar: UIControl {
     override init(frame: CGRect) {
         super.init(frame: frame)
         self.setupGeometry()
-        NotificationCenter.default.addObserver(self, selector: #selector(KFIndexBar.applicationWillResignActive(notification:)), name: .UIApplicationWillResignActive, object: nil)
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -381,7 +400,6 @@ class KFIndexBar: UIControl {
     override func awakeFromNib() {
         super.awakeFromNib()
         self.setupGeometry()
-        NotificationCenter.default.addObserver(self, selector: #selector(KFIndexBar.applicationWillResignActive(notification:)), name: .UIApplicationWillResignActive, object: nil)
     }
     
     override var intrinsicContentSize: CGSize {
@@ -389,9 +407,6 @@ class KFIndexBar: UIControl {
         return CGSize(width: max(self.frame.size.width, breadth), height: max(self.frame.size.height, breadth))
     }
     
-    func applicationWillResignActive(notification: NSNotification) {
-        self.zoomExtent = 0.0
-    }
     var lastLabelIndex: Int? = nil
     
     func topLabelIndex(forPosition pos: CGFloat) -> Int? {
@@ -514,7 +529,6 @@ class KFIndexBar: UIControl {
     
     override func tintColorDidChange() {
         super.tintColorDidChange()
-        let color = (self.tintAdjustmentMode == .dimmed ? self.dimmedTintColour : self.tintColor)
         self.recalcTopMarkerContextAndSizes()
         self.setNeedsDisplay()
     }

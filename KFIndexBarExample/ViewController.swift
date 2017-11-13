@@ -13,7 +13,7 @@ class ViewController: UIViewController {
     @IBOutlet var collectionView: UICollectionView?
     var indexBar:  KFIndexBar?
     
-    var items: [String] = surnames//[0..<300].map { $0 }
+    var items: [String] = surnames
 
     var indexConstraints: [NSLayoutAttribute:NSLayoutConstraint] = [:]
 
@@ -39,18 +39,9 @@ class ViewController: UIViewController {
         self.view.addConstraint(topConstraint)
         self.indexConstraints[.top] = topConstraint
         
-//        let cw = NSLayoutConstraint(item: indexBar, attribute: NSLayoutAttribute.width, relatedBy: .equal, toItem: nil, attribute: .notAnAttribute, multiplier: 1.0, constant: 20.0)
-//        self.indexConstraints[.width] = cw
-//        self.view.addConstraint(cw)
-//        let ch = NSLayoutConstraint(item: indexBar, attribute: NSLayoutAttribute.height, relatedBy: .equal, toItem: nil, attribute: .notAnAttribute, multiplier: 1.0, constant: 40.0)
-//        self.view.addConstraint(ch)
-//        self.indexConstraints[NSLayoutAttribute.height] = ch
-
         if self.isIpad {
-//            self.indexConstraints[.width]?.isActive = false
             self.indexConstraints[.top]?.isActive = false
         } else {
-//            self.indexConstraints[.height]?.isActive = false
             self.indexConstraints[.left]?.isActive = false
         }
         
@@ -74,7 +65,6 @@ class ViewController: UIViewController {
     }
     
     var isIpad: Bool { return self.traitCollection.horizontalSizeClass == .regular }
-
 }
 
 extension ViewController: KFIndexBarDataSource {
@@ -84,16 +74,10 @@ extension ViewController: KFIndexBarDataSource {
             (acc.0 + [KFIndexBar.Marker(label:group.0, offset:acc.1)], acc.1+group.1.count)
         }.0
         return markers
-//        return groups.map { KFIndexBar.Marker(label: $0.0, offset: 0) } // FIXME
-//        return [
-//            KFIndexBar.Marker(label: "X", offset: 0),
-//            KFIndexBar.Marker(label: "Y", offset: 100),
-//            KFIndexBar.Marker(label: "Z", offset: 200)
-//        ]
     }
     
     func indexBar(_ indexBar: KFIndexBar, markersBetween start: Int, and end: Int) -> [KFIndexBar.Marker] {
-        let groups = items[start..<min(items.count,end)].map{$0}.group(byKey: { $0.isEmpty ? "" : $0.substring(to:$0.index($0.startIndex, offsetBy:min(2, $0.characters.count))).uppercased() }, transform: {$0})
+        let groups = items[start..<min(items.count,end)].map{$0}.group(byKey: { $0.isEmpty ? "" : $0[$0.startIndex..<$0.index($0.startIndex, offsetBy:min(2, $0.count))].uppercased() }, transform: {$0})
         let markers: [KFIndexBar.Marker] = groups.reduce(([],start)) { (acc, group) -> ([KFIndexBar.Marker], Int) in
             (acc.0 + [KFIndexBar.Marker(label:group.0, offset:acc.1)], acc.1+group.1.count)
             }.0
