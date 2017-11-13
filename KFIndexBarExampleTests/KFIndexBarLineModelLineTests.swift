@@ -40,4 +40,24 @@ class KFIndexBarLineModelLineTests: XCTestCase {
         line.setSizes([3.0, 1.0, 2.0])
         XCTAssertEqual(line.midpointsScaled(by: 2.0, from: 5.0), [0.0, 6.0, 11.0])
     }
+    
+    func testCalculatesDelta() {
+        var line = KFIndexBar.LineModel.Line(length: 10.0, margin: 1.0)
+        line.setSizes([3.0, 1.0, 2.0]) // total length: 8
+        line.calculateDelta(forZoomOrigin: 5.0)
+        XCTAssertEqual(line.delta, 0.0)
+        line.calculateDelta(forZoomOrigin: 4.5)
+        XCTAssertEqual(line.delta, -0.5)
+        line.calculateDelta(forZoomOrigin: 4.0)
+        XCTAssertEqual(line.delta, -1.0)
+        line.calculateDelta(forZoomOrigin: 3.0)
+        XCTAssertEqual(line.delta, -1.0)
+        line.calculateDelta(forZoomOrigin: 5.5)
+        XCTAssertEqual(line.delta, 0.5)
+        line.calculateDelta(forZoomOrigin: 6.0)
+        XCTAssertEqual(line.delta, 1.0)
+        line.calculateDelta(forZoomOrigin: 7.0)
+        XCTAssertEqual(line.delta, 1.0)
+
+    }
 }

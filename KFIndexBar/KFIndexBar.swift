@@ -89,7 +89,7 @@ class KFIndexBar: UIControl {
                     self.delta = max(0.0, top+rawΔ) - top
                 } else {
                     let bottom = centre + halfSize
-                    self.delta = min(length-1, bottom+rawΔ) - bottom
+                    self.delta = min(length, bottom+rawΔ) - bottom
                 }
             }
             
