@@ -207,6 +207,10 @@ class KFIndexBar: UIControl {
     // MARK: UI/geometry settings
     var font: UIFont { return UIFont.boldSystemFont(ofSize: 12.0) }
     
+    let highlightedBarBackgroundColor = UIColor(white: 0.92, alpha: 0.5)
+    let normalBarBackgroundColor = UIColor(white: 1.0, alpha: 0.5)
+    let dimmedTintColour = UIColor.lightGray
+    
     let zoomDistance: CGFloat = 25.0
     let innerLabelViewPadding: CGFloat = 4.0
     let innerLabelViewMargin: CGFloat = 4.0
@@ -414,7 +418,7 @@ class KFIndexBar: UIControl {
                 let width = self.isHorizontal ? ext : self.frame.size.width
                 let height = self.isHorizontal ? self.frame.size.height : ext
                 ctx.addPath(UIBezierPath(roundedRect: CGRect(x: x, y: y, width: width, height: height), cornerRadius: innerLabelViewPadding).cgPath)
-                ctx.setFillColor((self.isHighlighted ? UIColor(white: 0.92, alpha: 0.5*(1-self.zoomExtent)) : (self.backgroundColor ?? UIColor.white).withAlphaComponent(0.5)).cgColor)
+                ctx.setFillColor((self.isHighlighted ? self.highlightedBarBackgroundColor.withAlphaComponent(0.5*(1-self.zoomExtent)) : self.normalBarBackgroundColor).cgColor)
                 ctx.closePath()
                 ctx.fillPath()
             }
@@ -464,7 +468,7 @@ class KFIndexBar: UIControl {
         defer { UIGraphicsEndImageContext() }
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         ctx.addPath(UIBezierPath(roundedRect: CGRect(x: innerLabelViewMargin, y: innerLabelViewMargin, width: imageSize.width - 2*innerLabelViewMargin, height: imageSize.height  - 2*innerLabelViewMargin), cornerRadius: innerLabelViewPadding).cgPath)
-        ctx.setFillColor(UIColor(white: 0.92, alpha: 0.5*self.zoomExtent).cgColor)
+        ctx.setFillColor(self.highlightedBarBackgroundColor.withAlphaComponent(0.5*self.zoomExtent).cgColor)
         ctx.closePath()
         ctx.fillPath()
 
@@ -510,7 +514,7 @@ class KFIndexBar: UIControl {
     
     override func tintColorDidChange() {
         super.tintColorDidChange()
-        let color = (self.tintAdjustmentMode == .dimmed ? UIColor.lightGray : self.tintColor)
+        let color = (self.tintAdjustmentMode == .dimmed ? self.dimmedTintColour : self.tintColor)
         self.recalcTopMarkerContextAndSizes()
         self.setNeedsDisplay()
     }
