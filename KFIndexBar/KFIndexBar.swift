@@ -364,9 +364,7 @@ class KFIndexBar: UIControl {
     // MARK: state to do with zooming in
     struct InnerMarkerContext {
         let positionAbove: Int
-        let markers: [Marker]
-        let maxMarkerSize: CGSize
-        let markerImages: [UIImage]
+        let markers: [DisplayableMarker]
     }
     
     var innerMarkerContext: InnerMarkerContext?
@@ -385,9 +383,9 @@ class KFIndexBar: UIControl {
             let innerMarkers = self.innerMarkers(underTopMarker: index),
             self.innerMarkerContext == nil || self.innerMarkerContext?.positionAbove != index
         else { return }
-        let (markerSizes, maxMarkerSize, markerImages) = self.sizesAndImages(forMarkers: innerMarkers)
-        self.innerMarkerContext = InnerMarkerContext(positionAbove: index, markers: innerMarkers, maxMarkerSize: maxMarkerSize, markerImages: markerImages)
-        self.lineModel.setInnerItemSizes(markerSizes, openBelow: index)
+        let displayables = self.makeDisplayable(innerMarkers)
+        self.innerMarkerContext = InnerMarkerContext(positionAbove: index, markers: displayables)
+        self.lineModel.setInnerItemSizes(displayables.map { $0.size }, openBelow: index)
     }
     
     // MARK: The snap-shut animation mechanism. (As labels are drawn, we cannot use CoreAnimation for this.)
@@ -494,7 +492,8 @@ class KFIndexBar: UIControl {
         let curvedExtent = 1.0 - ((1.0-self.zoomExtent)*(1.0-self.zoomExtent))
         let rα = (self.lineModel.inner1.itemSizes?.first ?? 0)*0.5
         let rΩ = (self.lineModel.inner1.itemSizes?.last ?? 0)*0.5
-        let rowBreadth = self.zoomingDimension(zoomInContext.maxMarkerSize)
+        let markerImgSize = zoomInContext.markers.first?.image.size ?? CGSize.zero
+        let rowBreadth = self.zoomingDimension(markerImgSize)
 
         let x0:CGFloat, y0:CGFloat, w: CGFloat, h: CGFloat
         let margin = innerLabelViewMargin + innerLabelViewPadding
@@ -523,18 +522,18 @@ class KFIndexBar: UIControl {
         ctx.fillPath()
 
         if self.isHorizontal {
-            let ypos = (imageSize.height - zoomInContext.maxMarkerSize.height) * 0.5
+            let ypos = (imageSize.height - markerImgSize.height) * 0.5
             let xoff = innerLabelViewMargin-self.innerLabelFrameView.frame.origin.x
             
-            for (mid, img) in zip(innerMids, zoomInContext.markerImages) {
-                img.draw(at: CGPoint(x:mid + xoff - zoomInContext.maxMarkerSize.width * 0.5, y:ypos), blendMode: .normal, alpha: zoomExtent)
+            for (mid, mkr) in zip(innerMids, zoomInContext.markers) {
+                mkr.image.draw(at: CGPoint(x:mid + xoff - mkr.image.size.width * 0.5, y:ypos), blendMode: .normal, alpha: zoomExtent)
             }
         } else {
-            let xpos = (imageSize.width - zoomInContext.maxMarkerSize.width) * 0.5
+            let xpos = (imageSize.width - markerImgSize.width) * 0.5
             let yoff = -self.innerLabelFrameView.frame.origin.y
 
-            for (mid, img) in zip(innerMids, zoomInContext.markerImages) {
-                img.draw(at: CGPoint(x:xpos, y:mid + yoff - zoomInContext.maxMarkerSize.height * 0.5), blendMode: .normal, alpha: zoomExtent)
+            for (mid, mkr) in zip(innerMids, zoomInContext.markers) {
+                mkr.image.draw(at: CGPoint(x:xpos, y:mid + yoff - mkr.image.size.height * 0.5), blendMode: .normal, alpha: zoomExtent)
             }
         }
         
