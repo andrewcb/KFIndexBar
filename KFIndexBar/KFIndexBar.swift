@@ -235,6 +235,8 @@ class KFIndexBar: UIControl {
     let innerLabelViewPadding: CGFloat = 4.0
     let innerLabelViewMargin: CGFloat = 4.0
     
+    let closeAnimationSpeed: CGFloat = 3.5 // in zoomExtent units/second
+    
     // MARK: lifecycle and UIKit interfacing
     
     override init(frame: CGRect) {
@@ -361,6 +363,39 @@ class KFIndexBar: UIControl {
         }
     }
     
+    // MARK: ----- Interaction state
+    
+    // this is to replace a bunch of state variables
+    enum InteractionState {
+        // Not currently being touched or animating;
+        case ready
+        case draggingTop
+        case zooming
+        case draggingInner
+        // This state sets up animations and transitions immediately to animatingShut
+        case startAnimatingShut
+        case animatingShut(lastFrameTime: CFTimeInterval)
+    }
+    var interactionState: InteractionState = .ready {
+        didSet(previous) {
+            switch(self.interactionState) {
+            case .ready:
+                if case .animatingShut(_) = previous {
+                    self.displayLink?.invalidate()
+                    self.displayLink = nil
+                }
+            case .startAnimatingShut:
+                self.displayLink = CADisplayLink(target: self, selector: #selector(animationTick))
+                self.interactionState = .animatingShut(lastFrameTime: CACurrentMediaTime())
+                self.displayLink?.add(to: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
+            case .animatingShut(let lastFrameTime):
+                break
+            default:
+                break
+            }
+        }
+    }
+    
     // MARK: state to do with zooming in
     struct InnerMarkerContext {
         let positionAbove: Int
@@ -389,40 +424,19 @@ class KFIndexBar: UIControl {
     }
     
     // MARK: The snap-shut animation mechanism. (As labels are drawn, we cannot use CoreAnimation for this.)
-    enum AnimationState {
-        case snapZoomOut(amountPerSecond: CGFloat)
-    }
-    var animationState: AnimationState? = nil {
-        didSet {
-            if self.animationState != nil {
-                if self.displayLink == nil {
-                    self.displayLink = CADisplayLink(target: self, selector: #selector(animationTick))
-                }
-                self.lastFrameTime = CACurrentMediaTime()
-                self.displayLink?.add(to: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
-            } else {
-                self.displayLink?.invalidate()
-                self.displayLink = nil
-            }
-        }
-    }
-    var lastFrameTime: CFTimeInterval? = nil
     var displayLink: CADisplayLink?
     
     @objc func animationTick(_ displayLink: CADisplayLink) {
         guard
-            let animState = self.animationState,
-            let lastFrameTime = self.lastFrameTime
+            case .animatingShut(let lastFrameTime) = self.interactionState
         else { return }
-        let timeElapsed = displayLink.timestamp - lastFrameTime
-        self.lastFrameTime = displayLink.timestamp
-        switch(animState) {
-        case .snapZoomOut(let amountPerSecond):
-            self.snappedToZoomIn = false
-            self.zoomExtent = max(0.0, self.zoomExtent - amountPerSecond*CGFloat(timeElapsed))
-            if self.zoomExtent == 0.0 {
-                self.animationState = nil
-            }
+        let now = displayLink.timestamp
+        let timeElapsed = now - lastFrameTime
+        self.interactionState = .animatingShut(lastFrameTime: now)
+        self.snappedToZoomIn = false
+        self.zoomExtent = max(0.0, self.zoomExtent - self.closeAnimationSpeed*CGFloat(timeElapsed))
+        if self.zoomExtent == 0.0 {
+            self.interactionState = .ready
         }
     }
     
@@ -590,6 +604,7 @@ class KFIndexBar: UIControl {
         if let index = self.topLabelIndex(forPosition: sc), let offset = self.topDisplayableMarkers?[index].offset {
             self._currentOffset = offset
         }
+        self.interactionState = .draggingTop
         return true
     }
     
@@ -617,11 +632,11 @@ class KFIndexBar: UIControl {
     }
     
     override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
-        self.animationState = .snapZoomOut(amountPerSecond: 3.5)
+        self.interactionState = .startAnimatingShut
     }
     
     override func cancelTracking(with event: UIEvent?) {
-        self.animationState = .snapZoomOut(amountPerSecond: 3.5)
+        self.interactionState = .startAnimatingShut
     }
 }
 
