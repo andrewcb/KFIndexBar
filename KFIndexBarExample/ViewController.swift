@@ -24,6 +24,7 @@ class ViewController: UIViewController {
         let indexBar = KFIndexBar(frame: .zero)
         self.view.addSubview(indexBar)
         indexBar.translatesAutoresizingMaskIntoConstraints = false
+        indexBar.isHorizontal = self.isIpad
         for attr: NSLayoutAttribute in [ .left, .right] {
             let c = NSLayoutConstraint(item: indexBar, attribute: attr, relatedBy: .equal, toItem: self.view, attribute: attr, multiplier: 1.0, constant: 0.0)
             self.view.addConstraint(c)

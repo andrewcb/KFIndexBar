@@ -468,7 +468,7 @@ class KFIndexBar: UIControl {
     
     // MARK: -------- orientation handling
     
-    private var isHorizontal: Bool { return self.frame.size.width > self.frame.size.height }
+    var isHorizontal: Bool = false
     private func selectionCoord(_ point: CGPoint) -> CGFloat { return self.isHorizontal ? point.x : point.y }
     private func zoomingCoord(_ point: CGPoint) -> CGFloat { return self.isHorizontal ? point.y : point.x }
     private func selectionDimension(_ size: CGSize) -> CGFloat { return self.isHorizontal ? size.width : size.height }
