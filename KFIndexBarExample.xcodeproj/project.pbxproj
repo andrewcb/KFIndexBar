@@ -12,7 +12,6 @@
 		44C4DB021F558CB000A92188 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 44C4DB001F558CB000A92188 /* Main.storyboard */; };
 		44C4DB041F558CB000A92188 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 44C4DB031F558CB000A92188 /* Assets.xcassets */; };
 		44C4DB071F558CB000A92188 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 44C4DB051F558CB000A92188 /* LaunchScreen.storyboard */; };
-		44C4DB121F558CB000A92188 /* KFIndexBarExampleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB111F558CB000A92188 /* KFIndexBarExampleTests.swift */; };
 		44C4DB1D1F558EEF00A92188 /* CollectionViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB1C1F558EEF00A92188 /* CollectionViewCell.swift */; };
 		44C4DB1F1F5595A000A92188 /* surnames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB1E1F5595A000A92188 /* surnames.swift */; };
 		44C4DB221F55976E00A92188 /* KFIndexBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C4DB211F55976E00A92188 /* KFIndexBar.swift */; };
@@ -40,7 +39,6 @@
 		44C4DB061F558CB000A92188 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		44C4DB081F558CB000A92188 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		44C4DB0D1F558CB000A92188 /* KFIndexBarExampleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KFIndexBarExampleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		44C4DB111F558CB000A92188 /* KFIndexBarExampleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KFIndexBarExampleTests.swift; sourceTree = "<group>"; };
 		44C4DB131F558CB000A92188 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		44C4DB1C1F558EEF00A92188 /* CollectionViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CollectionViewCell.swift; sourceTree = "<group>"; };
 		44C4DB1E1F5595A000A92188 /* surnames.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = surnames.swift; sourceTree = "<group>"; };
@@ -106,7 +104,6 @@
 		44C4DB101F558CB000A92188 /* KFIndexBarExampleTests */ = {
 			isa = PBXGroup;
 			children = (
-				44C4DB111F558CB000A92188 /* KFIndexBarExampleTests.swift */,
 				44C4DB131F558CB000A92188 /* Info.plist */,
 				44C4DB251F5AF32200A92188 /* KFIndexBarLineModelTests.swift */,
 				44D193401FAF7F82005C2BE9 /* KFIndexBarLineModelLineTests.swift */,
@@ -242,7 +239,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				44C4DB121F558CB000A92188 /* KFIndexBarExampleTests.swift in Sources */,
 				44D193411FAF7F82005C2BE9 /* KFIndexBarLineModelLineTests.swift in Sources */,
 				44C4DB261F5AF32200A92188 /* KFIndexBarLineModelTests.swift in Sources */,
 			);
