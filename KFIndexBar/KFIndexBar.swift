@@ -506,18 +506,18 @@ class KFIndexBar: UIControl {
                 ctx.closePath()
                 ctx.fillPath()
             }
-            
+
+            let posFunc: (CGFloat, DisplayableMarker) -> CGPoint
             if self.isHorizontal {
                 let ypos = (self.frame.size.height - imgSize.height) * 0.5
-                for (mid, mkr) in zip(topMids, topMarkers) {
-                    mkr.image.draw(at: CGPoint(x: mid - mkr.image.size.width*0.5, y:ypos), blendMode: .normal, alpha: (1.0-0.5*self.zoomExtent))
-                }
+                posFunc = { (mid, mkr) in  CGPoint(x: mid - mkr.image.size.width*0.5, y:ypos)}
                 
             } else {
                 let xpos = (self.frame.size.width - imgSize.width) * 0.5
-                for (mid, mkr) in zip(topMids, topMarkers) {
-                    mkr.image.draw(at: CGPoint(x: xpos, y:mid - mkr.image.size.height*0.5), blendMode: .normal, alpha: (1.0-0.5*self.zoomExtent))
-                }
+                posFunc = { (mid, mkr) in CGPoint(x: xpos, y:mid - mkr.image.size.height*0.5) }
+            }
+            for (mid, mkr) in zip(topMids, topMarkers) {
+                mkr.image.draw(at: posFunc(mid, mkr), blendMode: .normal, alpha: (1.0-0.5*self.zoomExtent))
             }
         }
     }
@@ -557,20 +557,20 @@ class KFIndexBar: UIControl {
         ctx.closePath()
         ctx.fillPath()
 
+        let posFunc: (CGFloat, DisplayableMarker) -> CGPoint
         if self.isHorizontal {
             let ypos = (imageSize.height - markerImgSize.height) * 0.5
             let xoff = innerLabelViewMargin-self.innerLabelFrameView.frame.origin.x
             
-            for (mid, mkr) in zip(innerMids, markers) {
-                mkr.image.draw(at: CGPoint(x:mid + xoff - mkr.image.size.width * 0.5, y:ypos), blendMode: .normal, alpha: self.zoomExtent)
-            }
+            posFunc = { (mid, mkr) in CGPoint(x:mid + xoff - mkr.image.size.width * 0.5, y:ypos) }
         } else {
             let xpos = (imageSize.width - markerImgSize.width) * 0.5
             let yoff = -self.innerLabelFrameView.frame.origin.y
 
-            for (mid, mkr) in zip(innerMids, markers) {
-                mkr.image.draw(at: CGPoint(x:xpos, y:mid + yoff - mkr.image.size.height * 0.5), blendMode: .normal, alpha: self.zoomExtent)
-            }
+            posFunc = { (mid, mkr) in CGPoint(x:xpos, y:mid + yoff - mkr.image.size.height * 0.5) }
+        }
+        for (mid, mkr) in zip(innerMids, markers) {
+            mkr.image.draw(at: posFunc(mid,mkr), blendMode: .normal, alpha: self.zoomExtent)
         }
         
         let image = UIGraphicsGetImageFromCurrentImageContext()
