@@ -270,7 +270,7 @@ class KFIndexBar: UIControl {
         let length = self.selectionDimension(self.frame.size)  - 2*innerLabelViewPadding
         if length != self.lineModel.length {
             self.lineModel.length = length
-            self.zoomExtent = 0.0
+            self.interactionState = .ready
             self.recalcTopMarkerContextAndSizes()
             self.setNeedsDisplay()
         }
@@ -334,22 +334,6 @@ class KFIndexBar: UIControl {
 
     // MARK: -------- Current interaction state and working store
     
-    // 0.0 = zoomed out on top-level headings; 1.0 = zoomed in, showing intermediate headings
-    var _zoomExtent: CGFloat = 0.0
-    var snappedToZoomIn: Bool = false
-    var zoomExtent: CGFloat {
-        get { return self.snappedToZoomIn ? 1.0 : self._zoomExtent }
-        set(v) {
-            self._zoomExtent = v
-            if v >= 1.0 { self.snappedToZoomIn = true }
-            self.setNeedsDisplay()
-            self.innerLabelFrameView.isHidden = (v == 0.0)
-            if v > 0.0 {
-                self.placeAndFillInnerLabelView()
-            }
-        }
-    }
-    
     var topDisplayableMarkers: [DisplayableMarker]?
     fileprivate func setTopMarkers(_ markers: [KFIndexBarMarkerProtocol]) {
         let displayable = self.makeDisplayable(markers)
@@ -363,48 +347,96 @@ class KFIndexBar: UIControl {
         }
     }
     
-    // MARK: ----- Interaction state
+    // MARK: ----- the Interaction State machine
     
     // this is to replace a bunch of state variables
     enum InteractionState {
         // Not currently being touched or animating;
         case ready
         case draggingTop
-        case zooming
-        case draggingInner
+        // A transient state when the user has dragged to initiate a zoom;
+        // this will go to either .zooming (if a zoom is possible) or back to .draggingTop (if not), with the
+        // stte filled in
+        case userDraggedToZoom(underTopIndex: Int)
+        // the view is being dragged between top-level and a fully opened zoom level
+        case zooming(topIndex: Int, innerMarkers: [DisplayableMarker], extent: CGFloat)
+        // the view is fully opened, and the user is selecting from the inner-level items
+        case draggingInner(topIndex: Int, innerMarkers: [DisplayableMarker])
         // This state sets up animations and transitions immediately to animatingShut
-        case startAnimatingShut
-        case animatingShut(lastFrameTime: CFTimeInterval)
+        case startAnimatingShut(from: CGFloat, topIndex: Int, innerMarkers: [DisplayableMarker])
+        case animatingShut(topIndex: Int, innerMarkers: [DisplayableMarker], extent: CGFloat, lastFrameTime: CFTimeInterval)
     }
+    
     var interactionState: InteractionState = .ready {
         didSet(previous) {
+            // much of the control's behaviour is in here
             switch(self.interactionState) {
             case .ready:
                 if case .animatingShut(_) = previous {
                     self.displayLink?.invalidate()
                     self.displayLink = nil
                 }
-            case .startAnimatingShut:
-                self.displayLink = CADisplayLink(target: self, selector: #selector(animationTick))
-                self.interactionState = .animatingShut(lastFrameTime: CACurrentMediaTime())
-                self.displayLink?.add(to: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
-            case .animatingShut(let lastFrameTime):
+                self.innerLabelFrameView.isHidden = true
+                self.setNeedsDisplay()
+                
+            case .draggingTop:
+                if case .zooming(_,_,_) = previous {
+                    self.innerLabelFrameView.isHidden = true
+                }
+                self.setNeedsDisplay()
+                
+            case .userDraggedToZoom(let topIndex):
+                guard
+                    let innerMarkers = self.getInnerMarkers(underTopMarker: topIndex),
+                    innerMarkers.count >= 2
+                else {
+                    self.interactionState = .draggingTop
+                    break
+                }
+                let displayables = self.makeDisplayable(innerMarkers)
+                self.lineModel.setInnerItemSizes(displayables.map { $0.size }, openBelow: topIndex)
+                self.interactionState = .zooming(topIndex: topIndex, innerMarkers: displayables, extent: 0.0)
+                self.innerLabelFrameView.isHidden = false
                 break
+                
+            case .zooming(_, _, _):
+                self.setNeedsDisplay()
+                self.placeAndFillInnerLabelView()
+                
+            case .startAnimatingShut(let from, let topIndex, let innerMarkers):
+                if from == 0.0 {
+                    self.interactionState = .ready
+                    break
+                }
+                self.displayLink = CADisplayLink(target: self, selector: #selector(animationTick))
+                self.interactionState = .animatingShut(topIndex: topIndex, innerMarkers: innerMarkers, extent: from, lastFrameTime: CACurrentMediaTime())
+                self.displayLink?.add(to: RunLoop.main, forMode: RunLoopMode.defaultRunLoopMode)
+                
             default:
                 break
             }
         }
     }
-    
-    // MARK: state to do with zooming in
-    struct InnerMarkerContext {
-        let positionAbove: Int
-        let markers: [DisplayableMarker]
+    var zoomExtent: CGFloat {
+        switch(self.interactionState) {
+        case .ready, .draggingTop, .userDraggedToZoom(_): return 0.0
+        case .zooming(_, _, let extent): return extent
+        case .draggingInner(_, _): return 1.0
+        case .startAnimatingShut(let from, _, _): return from
+        case .animatingShut(_, _, let extent, _): return extent
+        }
     }
     
-    var innerMarkerContext: InnerMarkerContext?
+    var innerMarkers: [DisplayableMarker]? {
+        switch(self.interactionState) {
+        case .zooming(_, let innerMarkers, _): return innerMarkers
+        case .draggingInner(_, let innerMarkers): return innerMarkers
+        case .animatingShut(_, let innerMarkers, _, _): return innerMarkers
+        default: return nil
+        }
+    }
     
-    private func innerMarkers(underTopMarker markerIndex: Int) -> [Marker]? {
+    private func getInnerMarkers(underTopMarker markerIndex: Int) -> [Marker]? {
         guard
             let topMarkers = self.topDisplayableMarkers
             else { return nil }
@@ -413,31 +445,21 @@ class KFIndexBar: UIControl {
         return self.dataSource?.indexBar(self, markersBetween: offsetFrom, and: offsetTo)
     }
     
-    func initialiseInnerMarkers(underTopIndex index: Int) {
-        guard
-            let innerMarkers = self.innerMarkers(underTopMarker: index),
-            self.innerMarkerContext == nil || self.innerMarkerContext?.positionAbove != index
-        else { return }
-        let displayables = self.makeDisplayable(innerMarkers)
-        self.innerMarkerContext = InnerMarkerContext(positionAbove: index, markers: displayables)
-        self.lineModel.setInnerItemSizes(displayables.map { $0.size }, openBelow: index)
-    }
     
     // MARK: The snap-shut animation mechanism. (As labels are drawn, we cannot use CoreAnimation for this.)
+    // The parts of the state transition function taking place during animation are handled here
     var displayLink: CADisplayLink?
     
     @objc func animationTick(_ displayLink: CADisplayLink) {
         guard
-            case .animatingShut(let lastFrameTime) = self.interactionState
+            case .animatingShut(let topIndex, let innerMarkers, let extent, let lastFrameTime) = self.interactionState
         else { return }
         let now = displayLink.timestamp
         let timeElapsed = now - lastFrameTime
-        self.interactionState = .animatingShut(lastFrameTime: now)
-        self.snappedToZoomIn = false
-        self.zoomExtent = max(0.0, self.zoomExtent - self.closeAnimationSpeed*CGFloat(timeElapsed))
-        if self.zoomExtent == 0.0 {
-            self.interactionState = .ready
-        }
+        let newExtent = max(0.0, extent - self.closeAnimationSpeed*CGFloat(timeElapsed))
+        self.interactionState = (newExtent == 0.0) ? .ready : .animatingShut(topIndex: topIndex, innerMarkers: innerMarkers, extent: newExtent, lastFrameTime: now)
+        self.setNeedsDisplay()
+        self.placeAndFillInnerLabelView()
     }
     
     // MARK: --------
@@ -488,25 +510,25 @@ class KFIndexBar: UIControl {
             if self.isHorizontal {
                 let ypos = (self.frame.size.height - imgSize.height) * 0.5
                 for (mid, mkr) in zip(topMids, topMarkers) {
-                    mkr.image.draw(at: CGPoint(x: mid - mkr.image.size.width*0.5, y:ypos), blendMode: .normal, alpha: (1.0-0.5*zoomExtent))
+                    mkr.image.draw(at: CGPoint(x: mid - mkr.image.size.width*0.5, y:ypos), blendMode: .normal, alpha: (1.0-0.5*self.zoomExtent))
                 }
                 
             } else {
                 let xpos = (self.frame.size.width - imgSize.width) * 0.5
                 for (mid, mkr) in zip(topMids, topMarkers) {
-                    mkr.image.draw(at: CGPoint(x: xpos, y:mid - mkr.image.size.height*0.5), blendMode: .normal, alpha: (1.0-0.5*zoomExtent))
+                    mkr.image.draw(at: CGPoint(x: xpos, y:mid - mkr.image.size.height*0.5), blendMode: .normal, alpha: (1.0-0.5*self.zoomExtent))
                 }
             }
         }
     }
     
     private func placeAndFillInnerLabelView() {
-        guard let zoomInContext = self.innerMarkerContext else { fatalError("Can't place inner label view without context") }
+        guard let markers = self.innerMarkers else { return }
         let innerMids = self.lineModel.calculateInnerPositions(forZoomExtent: self.zoomExtent)
         let curvedExtent = 1.0 - ((1.0-self.zoomExtent)*(1.0-self.zoomExtent))
         let rα = (self.lineModel.inner1.itemSizes?.first ?? 0)*0.5
         let rΩ = (self.lineModel.inner1.itemSizes?.last ?? 0)*0.5
-        let markerImgSize = zoomInContext.markers.first?.image.size ?? CGSize.zero
+        let markerImgSize = markers.first?.image.size ?? CGSize.zero
         let rowBreadth = self.zoomingDimension(markerImgSize)
 
         let x0:CGFloat, y0:CGFloat, w: CGFloat, h: CGFloat
@@ -539,15 +561,15 @@ class KFIndexBar: UIControl {
             let ypos = (imageSize.height - markerImgSize.height) * 0.5
             let xoff = innerLabelViewMargin-self.innerLabelFrameView.frame.origin.x
             
-            for (mid, mkr) in zip(innerMids, zoomInContext.markers) {
-                mkr.image.draw(at: CGPoint(x:mid + xoff - mkr.image.size.width * 0.5, y:ypos), blendMode: .normal, alpha: zoomExtent)
+            for (mid, mkr) in zip(innerMids, markers) {
+                mkr.image.draw(at: CGPoint(x:mid + xoff - mkr.image.size.width * 0.5, y:ypos), blendMode: .normal, alpha: self.zoomExtent)
             }
         } else {
             let xpos = (imageSize.width - markerImgSize.width) * 0.5
             let yoff = -self.innerLabelFrameView.frame.origin.y
 
-            for (mid, mkr) in zip(innerMids, zoomInContext.markers) {
-                mkr.image.draw(at: CGPoint(x:xpos, y:mid + yoff - mkr.image.size.height * 0.5), blendMode: .normal, alpha: zoomExtent)
+            for (mid, mkr) in zip(innerMids, markers) {
+                mkr.image.draw(at: CGPoint(x:xpos, y:mid + yoff - mkr.image.size.height * 0.5), blendMode: .normal, alpha: self.zoomExtent)
             }
         }
         
@@ -556,49 +578,18 @@ class KFIndexBar: UIControl {
         // CoreImage blurring is far too slow here; most of the work seems in communicating with the GPU, from CIContext.createCGImage(...)
         self.innerLabelFrameView.layer.contents = image?.cgImage
     }
-
-    private func sizesAndImages(forMarkers markers: [Marker]) -> ([CGFloat], CGSize, [UIImage]) {
-        let everywhere = CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
-        let attribs: [NSAttributedStringKey:Any] = [
-            .font: self.font,
-            .foregroundColor: self.tintColor
-        ]
-        let markerSizes = markers.map { $0.label.boundingRect(with: everywhere, options: .usesLineFragmentOrigin, attributes: attribs, context: nil).size }
-        let maxMarkerSize = CGSize(
-            width: ceil(markerSizes.map {$0.width}.max() ?? 0.0),
-            height: ceil(markerSizes.map {$0.height}.max() ?? 0.0))
-        
-        let markerImages = zip(markers, markerSizes).map { arg -> UIImage in
-            let (marker, msize) = arg
-            UIGraphicsBeginImageContextWithOptions(CGSize(width: maxMarkerSize.width, height: maxMarkerSize.height), false, 0.0)
-            defer { UIGraphicsEndImageContext() }
-            marker.label.draw(
-                with:CGRect(origin: CGPoint(x:(maxMarkerSize.width-msize.width)*0.5, y:(maxMarkerSize.height-msize.height)*0.5), size: msize),
-                options: .usesLineFragmentOrigin,
-                attributes:attribs, context: nil)
-            return UIGraphicsGetImageFromCurrentImageContext()!
-        }
-        let sizeFunction: ((CGSize)->CGFloat) = isHorizontal ? { $0.width } : { $0.height }
-        return (
-            markerSizes.map(sizeFunction),
-            maxMarkerSize,
-            markerImages)
-    }
     
     //MARK: --------
 
     func reloadData() {
         self.setTopMarkers(self.dataSource?.topLevelMarkers(forIndexBar: self) ?? [])
-        self._zoomExtent = 0.0
         self.setNeedsLayout()
-        self.setNeedsDisplay()
+        self.interactionState = .ready
     }
     
     //MARK: ----- event tracking
     
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
-        self._zoomExtent = 0.0
-        self.snappedToZoomIn = false
         let loc = touch.location(in: self)
         let sc = self.selectionCoord(loc)
         if let index = self.topLabelIndex(forPosition: sc), let offset = self.topDisplayableMarkers?[index].offset {
@@ -611,32 +602,48 @@ class KFIndexBar: UIControl {
     override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         let loc = touch.location(in: self)
         let zc = self.zoomingCoord(loc), sc = self.selectionCoord(loc)
-        if !self.snappedToZoomIn {
+        let zoomExtent = min(1.0, max(0.0, -(zc / self.zoomDistance)))
+        
+        switch(self.interactionState) {
+        case .draggingTop:
             if let topIndex = self.topLabelIndex(forPosition: sc) {
                 if zc >= 0.0, let offset = self.topDisplayableMarkers?[topIndex].offset {
                     self._currentOffset = offset
                 }
                 if zc < 0.0 {
-                    self.initialiseInnerMarkers(underTopIndex: topIndex)
+                    self.interactionState = .userDraggedToZoom(underTopIndex: topIndex)
                 }
             }
+        case .zooming(let topIndex, let innerMarkers, _):
+            if zoomExtent == 1.0 {
+                self.interactionState = .draggingInner(topIndex: topIndex, innerMarkers: innerMarkers)
+            } else if zoomExtent == 0.0 {
+                self.interactionState = .draggingTop
+            } else {
+                self.interactionState = .zooming(topIndex: topIndex, innerMarkers: innerMarkers, extent: zoomExtent)
+            }
+        case .draggingInner(_, let innerMarkers):
+            if let index = innerLabelIndex(forPosition: sc) {
+                self._currentOffset = innerMarkers[index].offset
+            }
+        default: break
         }
-        if self.snappedToZoomIn, let zoomInState = self.innerMarkerContext, let index = innerLabelIndex(forPosition: sc) {
-            let marker = zoomInState.markers[index]
-            self._currentOffset = marker.offset
-        }
-        
-        let canZoomIn = !(self.innerMarkerContext?.markers.isEmpty ?? true)
-        self.zoomExtent = canZoomIn ? (self.snappedToZoomIn ? 1.0 : min(1.0, max(0.0, -(zc / self.zoomDistance)))) : 0.0
         return true
     }
     
     override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
-        self.interactionState = .startAnimatingShut
+        switch (self.interactionState) {
+        case .zooming(let topIndex, let innerMarkers, let extent):
+            self.interactionState = .startAnimatingShut(from: extent, topIndex: topIndex, innerMarkers: innerMarkers)
+        case .draggingInner(let topIndex, let innerMarkers):
+            self.interactionState = .startAnimatingShut(from: 1.0, topIndex: topIndex, innerMarkers: innerMarkers)
+        default:
+            self.interactionState = .ready
+        }
     }
     
     override func cancelTracking(with event: UIEvent?) {
-        self.interactionState = .startAnimatingShut
+        self.interactionState = .ready
     }
 }
 
