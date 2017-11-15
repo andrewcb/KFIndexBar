@@ -37,191 +37,11 @@ class KFIndexBar: UIControl {
             }
         }
     }
-    
-    // An object modelling the placement of labels on a line, and the zooming from an outer set of labels to an inner one
-    struct LineModel {
-        
-        // A `Line` is an individual line of items, with a length. It is given a list of sizes and a delta value to shift positions by and, from this, calculates item midpoints and global values (such as the start and end of all items, the total span occupied by items, and the global midpoint of this span).
-        struct Line {
-            var length: CGFloat { didSet { self.recalculate() } }
-            let margin: CGFloat
 
-            var itemSizes: [CGFloat]? = nil { didSet { self.recalculate() } }
-            /// The displacement value added to all points
-            var delta: CGFloat = 0.0 {
-                didSet {
-                    self.recalculate()
-                }
-            }
+    /** If `true`, the index bar runs horizontally, i.e., typically along the top or bottom edge of a control; otherwise, it runs vertically (like the `UITableView` index bar it resembles).
+        This should be set when this control is being initialised.*/
+    var isHorizontal: Bool = false
 
-            // derived values
-            var midpoints: [CGFloat]? = nil
-            /// the point at which the first item starts
-            var startPos: CGFloat?
-            /// the point at which the last item ends
-            var endPos: CGFloat?
-            /// the space taken up between startPos and endPos
-            var extent: CGFloat = 0.0
-            /// the point equidistant between startPos and endPos
-            var midpoint: CGFloat?
-            /// the gap between items; usualy equal to margin, unless shrunk
-            var itemGap: CGFloat = 0.0
-
-            init(length: CGFloat, margin: CGFloat) {
-                self.length = length
-                self.margin = margin
-            }
-            
-            mutating func setSizes(_ sizes: [CGFloat]) {
-                self.itemSizes = sizes
-            }
-            
-            /** Calculate the offset to adjust positions by, which is as close to being centred around `zoomOrigin` as possible without the outermost elements going out of the line's space */
-            mutating func calculateDelta(forZoomOrigin zoomOrigin: CGFloat) {
-                let centre = self.length * 0.5
-                let rawΔ = zoomOrigin - centre
-                let sizes = self.itemSizes ?? []
-                let halfSize = (sizes.isEmpty ? 0.0 : sizes.reduce(0,+) + (CGFloat(sizes.count-1)*self.itemGap)) * 0.5
-                if rawΔ < 0.0 {
-                    let top = centre - halfSize
-                    self.delta = max(0.0, top+rawΔ) - top
-                } else {
-                    let bottom = centre + halfSize
-                    self.delta = min(length, bottom+rawΔ) - bottom
-                }
-            }
-            
-            mutating func recalculate() {
-                guard let sizes = self.itemSizes, sizes.count >= 2 else {
-                    self.midpoints = self.itemSizes.map { $0.map { _ in (self.length * 0.5)+self.delta} }
-                    self.itemGap = self.margin
-                    self.startPos = (self.itemSizes?.first.map { (self.length - $0) * 0.5 } ?? 0.0) + delta
-                    self.endPos = (self.itemSizes?.first.map { (self.length + $0) * 0.5 } ?? 0.0)  + delta
-                    self.extent = self.itemSizes?.first ?? 0.0
-                    self.midpoint = self.length * 0.5 + delta
-                    return
-                }
-                let totalSize =  sizes.reduce(0,+)
-                self.itemGap = min(margin, (self.length - totalSize) / CGFloat(sizes.count - 1))
-                self.startPos = ((self.length - (totalSize + CGFloat(sizes.count-1) * itemGap)) * 0.5) + self.delta
-                self.midpoints = (sizes.reduce(([], startPos!)) {  (acc:([CGFloat],CGFloat), size:CGFloat) in
-                    (acc.0 + [acc.1+size*0.5], acc.1+size+itemGap)
-                }).0
-                self.endPos = midpoints?.last.flatMap { (mp) in self.itemSizes?.last.flatMap { (sz) in mp + sz*0.5 } }
-                self.extent = self.endPos! - self.startPos!
-                self.midpoint = (self.endPos! + self.startPos!) * 0.5
-            }
-            
-            func midpointsScaled(by factor: CGFloat, from origin: CGFloat) -> [CGFloat] {
-                return (self.midpoints ?? []).map { (($0 - origin) * factor) + origin }
-            }
-            
-            func trailingBoundary(after index: Int) -> CGFloat {
-                guard let midpoints = self.midpoints, let sizes = self.itemSizes else { return self.length * 0.5 }
-                if index < midpoints.count-1 {
-                    let thisEnd = midpoints[index]+sizes[index]*0.5
-                    let nextStart = midpoints[index+1] - sizes[index+1]*0.5
-                    return (thisEnd + nextStart) * 0.5
-                } else {
-                    return self.length - 1.0
-                }
-            }
-            
-            func midpointGap(after index: Int) -> CGFloat {
-                guard let midpoints = self.midpoints, index < midpoints.count else { return 0.0 }
-                let pos0 = midpoints[index]
-                let pos1 = (index >= midpoints.count-1) ? self.length : midpoints[index+1]
-                return pos1 - pos0
-            }
-
-            func findItem(forPosition pos: CGFloat) -> Int? {
-                guard
-                    let midpoints = self.midpoints,
-                    !midpoints.isEmpty,
-                    let sizes = self.itemSizes,
-                    let startPos = self.startPos,
-                    let endPos = self.endPos,
-                    pos >= startPos,
-                    pos <= endPos
-                    else { return nil }
-                return (zip(midpoints, sizes).enumerated().first { ($0.element.0 - ($0.element.1*0.5)) >= pos }?.offset).map { $0 - 1 }.flatMap { $0>=0 ? $0 : nil } ?? (midpoints.count-1)
-            }
-        }
-        
-        // the `LineModel` maintains two `Line`s: one representing the outer markers, in their normal, zoomed-out state, and one representing the inner markers, when fully zoomed in (whose values are only valid when a zooming operation is taking place, as the markers will vary). Interpolating between these two is the `LineModel`'s responsibility.
-        var outer0: Line
-        var inner1: Line
-        
-        var length: CGFloat {
-            get {
-                return self.outer0.length
-            }
-            set(v) {
-                self.outer0.length = v
-                self.inner1.length = v
-            }
-        }
-        init(length: CGFloat, margin: CGFloat = 10.0) {
-            self.outer0 = Line(length: length, margin: margin)
-            self.inner1 = Line(length: length, margin: margin)
-        }
-
-        // When zooming in, this stores the geometric parameters
-        var zoomGeometry: (
-            // the origin on the line around which the outer labels are pushed outward, and from which the inner labels emerge
-            origin: CGFloat,
-            // the scale by which distances are expanded at the maximum extent of zooming in
-            scale: CGFloat,
-            // the offset added to items at the maximum extent of zooming in; it is scaled proportionally with zoom extent
-            offset: CGFloat
-        )?
-        
-        mutating func setOuterItemSizes(_ sizes: [CGFloat]) {
-            self.outer0.itemSizes = sizes
-        }
-        
-        func innerDelta(forSizes sizes: [CGFloat], zoomOrigin: CGFloat) -> CGFloat {
-            let centre = self.length * 0.5
-            let rawΔ = zoomOrigin - centre
-            let halfSize = (sizes.isEmpty ? 0.0 : sizes.reduce(0,+) + (CGFloat(sizes.count-1)*self.inner1.itemGap)) * 0.5
-            if rawΔ < 0.0 {
-                let top = centre - halfSize
-                return max(0.0, top+rawΔ) - top
-            } else {
-                let bottom = centre + halfSize
-                return min(length-1, bottom+rawΔ) - bottom
-            }
-        }
-        
-        mutating func setInnerItemSizes(_ sizes: [CGFloat], openBelow index: Int) {
-            let origin = self.zoomOrigin(forItemIndex: index)
-            self.inner1.setSizes(sizes)
-            self.inner1.calculateDelta(forZoomOrigin: origin)
-            let δm = outer0.midpointGap(after: index)
-            self.zoomGeometry = (
-                origin: origin,
-                scale: (self.inner1.extent + δm) / δm,
-                offset: self.inner1.midpoint! - origin
-            )
-        }
-        
-        func calculateOuterPositions(forZoomExtent zoomExtent: CGFloat) -> [CGFloat] {
-            guard let (origin, scale, maxOffset) = self.zoomGeometry else { return self.outer0.midpoints ?? [] }
-            let ratio = 1.0 + (scale-1.0)*zoomExtent
-            let offset = maxOffset * zoomExtent
-            return self.outer0.midpointsScaled(by: ratio, from: origin).map { $0+offset }
-        }
-        
-        func calculateInnerPositions(forZoomExtent zoomExtent: CGFloat) -> [CGFloat] {
-            guard let (origin, _, _) = self.zoomGeometry else { return [] }
-            return (self.inner1.midpoints ?? []).map { origin * (1-zoomExtent) + $0 * zoomExtent }
-        }
-        
-        func zoomOrigin(forItemIndex index: Int) -> CGFloat {
-            return self.outer0.trailingBoundary(after: index)
-        }
-    }
-    
     // MARK: UI/geometry settings
     var font: UIFont { return UIFont.boldSystemFont(ofSize: 12.0) }
     
@@ -351,10 +171,11 @@ class KFIndexBar: UIControl {
     enum InteractionState {
         // Not currently being touched or animating;
         case ready
+        // The user is dragging along the top-level markers
         case draggingTop
         // A transient state when the user has dragged to initiate a zoom;
         // this will go to either .zooming (if a zoom is possible) or back to .draggingTop (if not), with the
-        // stte filled in
+        // relevant data filled in
         case userDraggedToZoom(underTopIndex: Int)
         // the view is being dragged between top-level and a fully opened zoom level
         case zooming(topIndex: Int, innerMarkers: [DisplayableMarker], extent: CGFloat)
@@ -460,19 +281,197 @@ class KFIndexBar: UIControl {
         self.placeAndFillInnerLabelView()
     }
     
-    // MARK: --------
-    
+    /* MARK: ----- The Line Model
+     A 1-dimensional geometric model of marker layout, with outer and inner lines.
+     This is used to calculate inner and outer marker positions.
+    */
+
+    struct LineModel {
+        
+        // A `Line` is an individual line of items, with a length. It is given a list of sizes and a delta value to shift positions by and, from this, calculates item midpoints and global values (such as the start and end of all items, the total span occupied by items, and the global midpoint of this span).
+        struct Line {
+            var length: CGFloat { didSet { self.recalculate() } }
+            let margin: CGFloat
+            
+            var itemSizes: [CGFloat]? = nil { didSet { self.recalculate() } }
+            /// The displacement value added to all points
+            var delta: CGFloat = 0.0 { didSet { self.recalculate() } }
+            
+            // derived values
+            var midpoints: [CGFloat]? = nil
+            /// the point at which the first item starts
+            var startPos: CGFloat?
+            /// the point at which the last item ends
+            var endPos: CGFloat?
+            /// the space taken up between startPos and endPos
+            var extent: CGFloat = 0.0
+            /// the point equidistant between startPos and endPos
+            var midpoint: CGFloat?
+            /// the gap between items; usually equal to margin, unless shrunk
+            var itemGap: CGFloat = 0.0
+            
+            init(length: CGFloat, margin: CGFloat) {
+                self.length = length
+                self.margin = margin
+            }
+            
+            mutating func setSizes(_ sizes: [CGFloat]) {
+                self.itemSizes = sizes
+            }
+            
+            /** Calculate the offset to adjust positions by, which is as close to being centred around `zoomOrigin` as possible without the outermost elements going out of the line's space */
+            mutating func calculateDelta(forZoomOrigin zoomOrigin: CGFloat) {
+                let centre = self.length * 0.5
+                let rawΔ = zoomOrigin - centre
+                let sizes = self.itemSizes ?? []
+                let halfSize = (sizes.isEmpty ? 0.0 : sizes.reduce(0,+) + (CGFloat(sizes.count-1)*self.itemGap)) * 0.5
+                if rawΔ < 0.0 {
+                    let top = centre - halfSize
+                    self.delta = max(0.0, top+rawΔ) - top
+                } else {
+                    let bottom = centre + halfSize
+                    self.delta = min(length, bottom+rawΔ) - bottom
+                }
+            }
+            
+            mutating func recalculate() {
+                guard let sizes = self.itemSizes, sizes.count >= 2 else {
+                    self.midpoints = self.itemSizes.map { $0.map { _ in (self.length * 0.5)+self.delta} }
+                    self.itemGap = self.margin
+                    self.startPos = (self.itemSizes?.first.map { (self.length - $0) * 0.5 } ?? 0.0) + delta
+                    self.endPos = (self.itemSizes?.first.map { (self.length + $0) * 0.5 } ?? 0.0)  + delta
+                    self.extent = self.itemSizes?.first ?? 0.0
+                    self.midpoint = self.length * 0.5 + delta
+                    return
+                }
+                let totalSize =  sizes.reduce(0,+)
+                self.itemGap = min(margin, (self.length - totalSize) / CGFloat(sizes.count - 1))
+                self.startPos = ((self.length - (totalSize + CGFloat(sizes.count-1) * itemGap)) * 0.5) + self.delta
+                self.midpoints = (sizes.reduce(([], startPos!)) {  (acc:([CGFloat],CGFloat), size:CGFloat) in
+                    (acc.0 + [acc.1+size*0.5], acc.1+size+itemGap)
+                }).0
+                self.endPos = midpoints?.last.flatMap { (mp) in self.itemSizes?.last.flatMap { (sz) in mp + sz*0.5 } }
+                self.extent = self.endPos! - self.startPos!
+                self.midpoint = (self.endPos! + self.startPos!) * 0.5
+            }
+            
+            func midpointsScaled(by factor: CGFloat, from origin: CGFloat) -> [CGFloat] {
+                return (self.midpoints ?? []).map { (($0 - origin) * factor) + origin }
+            }
+            
+            func trailingBoundary(after index: Int) -> CGFloat {
+                guard let midpoints = self.midpoints, let sizes = self.itemSizes else { return self.length * 0.5 }
+                if index < midpoints.count-1 {
+                    let thisEnd = midpoints[index]+sizes[index]*0.5
+                    let nextStart = midpoints[index+1] - sizes[index+1]*0.5
+                    return (thisEnd + nextStart) * 0.5
+                } else {
+                    return self.length - 1.0
+                }
+            }
+            
+            func midpointGap(after index: Int) -> CGFloat {
+                guard let midpoints = self.midpoints, index < midpoints.count else { return 0.0 }
+                let pos0 = midpoints[index]
+                let pos1 = (index >= midpoints.count-1) ? self.length : midpoints[index+1]
+                return pos1 - pos0
+            }
+            
+            func findItem(forPosition pos: CGFloat) -> Int? {
+                guard
+                    let midpoints = self.midpoints,
+                    !midpoints.isEmpty,
+                    let sizes = self.itemSizes,
+                    let startPos = self.startPos,
+                    let endPos = self.endPos,
+                    pos >= startPos,
+                    pos <= endPos
+                    else { return nil }
+                return (zip(midpoints, sizes).enumerated().first { ($0.element.0 - ($0.element.1*0.5)) >= pos }?.offset).map { $0 - 1 }.flatMap { $0>=0 ? $0 : nil } ?? (midpoints.count-1)
+            }
+        }
+        
+        // the `LineModel` maintains two `Line`s: one representing the outer markers, in their normal, zoomed-out state, and one representing the inner markers, when fully zoomed in (whose values are only valid when a zooming operation is taking place, as the markers will vary). Interpolating between these two is the `LineModel`'s responsibility.
+        var outer0: Line
+        var inner1: Line
+        
+        init(length: CGFloat, margin: CGFloat = 10.0) {
+            self.outer0 = Line(length: length, margin: margin)
+            self.inner1 = Line(length: length, margin: margin)
+        }
+        
+        var length: CGFloat {
+            get { return self.outer0.length }
+            set(v) {
+                self.outer0.length = v
+                self.inner1.length = v
+            }
+        }
+        
+        // When zooming in, this stores the geometric parameters
+        var zoomGeometry: (
+            // the origin on the line around which the outer labels are pushed outward, and from which the inner labels emerge
+            origin: CGFloat,
+            // the scale by which distances are expanded at the maximum extent of zooming in
+            scale: CGFloat,
+            // the offset added to items at the maximum extent of zooming in; it is scaled proportionally with zoom extent
+            offset: CGFloat
+        )?
+        
+        mutating func setOuterItemSizes(_ sizes: [CGFloat]) { self.outer0.itemSizes = sizes }
+        
+        mutating func setInnerItemSizes(_ sizes: [CGFloat], openBelow index: Int) {
+            let origin = self.zoomOrigin(forItemIndex: index)
+            self.inner1.setSizes(sizes)
+            self.inner1.calculateDelta(forZoomOrigin: origin)
+            let δm = outer0.midpointGap(after: index)
+            self.zoomGeometry = (
+                origin: origin,
+                scale: (self.inner1.extent + δm + self.inner1.itemGap) / δm,
+                offset: self.inner1.midpoint! - origin + self.inner1.itemGap*0.5
+            )
+        }
+        
+        func innerDelta(forSizes sizes: [CGFloat], zoomOrigin: CGFloat) -> CGFloat {
+            let centre = self.length * 0.5
+            let rawΔ = zoomOrigin - centre
+            let halfSize = (sizes.isEmpty ? 0.0 : sizes.reduce(0,+) + (CGFloat(sizes.count-1)*self.inner1.itemGap)) * 0.5
+            if rawΔ < 0.0 {
+                let top = centre - halfSize
+                return max(0.0, top+rawΔ) - top
+            } else {
+                let bottom = centre + halfSize
+                return min(length-1, bottom+rawΔ) - bottom
+            }
+        }
+        
+        func calculateOuterPositions(forZoomExtent zoomExtent: CGFloat) -> [CGFloat] {
+            guard let (origin, scale, maxOffset) = self.zoomGeometry else { return self.outer0.midpoints ?? [] }
+            let ratio = 1.0 + (scale-1.0)*zoomExtent
+            let offset = maxOffset * zoomExtent
+            return self.outer0.midpointsScaled(by: ratio, from: origin).map { $0+offset }
+        }
+        
+        func calculateInnerPositions(forZoomExtent zoomExtent: CGFloat) -> [CGFloat] {
+            guard let (origin, _, _) = self.zoomGeometry else { return [] }
+            return (self.inner1.midpoints ?? []).map { origin * (1-zoomExtent) + $0 * zoomExtent }
+        }
+        
+        func zoomOrigin(forItemIndex index: Int) -> CGFloat {
+            return self.outer0.trailingBoundary(after: index)
+        }
+    }
+
     var lineModel: LineModel = LineModel(length:0.0)
     
-    // MARK: -------- orientation handling
+    // MARK: ----- Utility functions for internal use
     
-    var isHorizontal: Bool = false
+    // Utilities for orientation-independent handling of coordinates
+    
     private func selectionCoord(_ point: CGPoint) -> CGFloat { return self.isHorizontal ? point.x : point.y }
     private func zoomingCoord(_ point: CGPoint) -> CGFloat { return self.isHorizontal ? point.y : point.x }
     private func selectionDimension(_ size: CGSize) -> CGFloat { return self.isHorizontal ? size.width : size.height }
     private func zoomingDimension(_ size: CGSize) -> CGFloat { return self.isHorizontal ? size.height : size.width }
-    
-    // MARK: -------
     
     func topLabelIndex(forPosition pos: CGFloat) -> Int? {
         return self.lineModel.outer0.findItem(forPosition:pos)
@@ -482,68 +481,67 @@ class KFIndexBar: UIControl {
         return self.lineModel.inner1.findItem(forPosition:pos)
     }
     
-    // MARK: -------- Drawing and image rendering
+    // MARK: ----- Drawing and image rendering
     override func draw(_ rect: CGRect) {
-        if let topMarkers = self.topDisplayableMarkers {
-            let topMids = self.lineModel.calculateOuterPositions(forZoomExtent: self.zoomExtent)
-            
-            let imgSize = topMarkers.first?.image.size ?? CGSize.zero
-            let r = self.selectionDimension(imgSize)*0.5
-            if
-                let start = (topMids.first.map { $0 - r }),
-                let end = (topMids.last.map { $0 + r }),
-                let ctx = UIGraphicsGetCurrentContext()
-            {
-                let ext = end-start
-                let x = self.isHorizontal ? start : 0.0
-                let y = self.isHorizontal ? 0.0 : start
-                let width = self.isHorizontal ? ext : self.frame.size.width
-                let height = self.isHorizontal ? self.frame.size.height : ext
-                ctx.addPath(UIBezierPath(roundedRect: CGRect(x: x, y: y, width: width, height: height), cornerRadius: innerLabelViewPadding).cgPath)
-                ctx.setFillColor((self.isHighlighted ? self.highlightedBarBackgroundColor.withAlphaComponent(0.5*(1-self.zoomExtent)) : self.normalBarBackgroundColor).cgColor)
-                ctx.closePath()
-                ctx.fillPath()
-            }
+        let topMids = self.lineModel.calculateOuterPositions(forZoomExtent: self.zoomExtent)
+        guard
+            let topMarkers = self.topDisplayableMarkers,
+            let imgSize = topMarkers.first?.image.size,
+            let midα = topMids.first,
+            let midΩ = topMids.last,
+            let ctx = UIGraphicsGetCurrentContext()
+        else { return }
 
-            let posFunc: (CGFloat, DisplayableMarker) -> CGPoint
-            if self.isHorizontal {
-                let ypos = (self.frame.size.height - imgSize.height) * 0.5
-                posFunc = { (mid, mkr) in  CGPoint(x: mid - mkr.image.size.width*0.5, y:ypos)}
-                
-            } else {
-                let xpos = (self.frame.size.width - imgSize.width) * 0.5
-                posFunc = { (mid, mkr) in CGPoint(x: xpos, y:mid - mkr.image.size.height*0.5) }
-            }
-            for (mid, mkr) in zip(topMids, topMarkers) {
-                mkr.image.draw(at: posFunc(mid, mkr), blendMode: .normal, alpha: (1.0-0.5*self.zoomExtent))
-            }
+        // The rounded rectangle background
+        let r = self.selectionDimension(imgSize)*0.5, start = midα - r, end = midΩ + r, ext = end-start
+        let x = self.isHorizontal ? start : 0.0
+        let y = self.isHorizontal ? 0.0 : start
+        let width = self.isHorizontal ? ext : self.frame.size.width
+        let height = self.isHorizontal ? self.frame.size.height : ext
+        ctx.addPath(UIBezierPath(roundedRect: CGRect(x: x, y: y, width: width, height: height), cornerRadius: innerLabelViewPadding).cgPath)
+        ctx.setFillColor((self.isHighlighted ? self.highlightedBarBackgroundColor.withAlphaComponent(0.5*(1-self.zoomExtent)) : self.normalBarBackgroundColor).cgColor)
+        ctx.closePath()
+        ctx.fillPath()
+
+        let posFunc: (CGFloat, DisplayableMarker) -> CGPoint
+        if self.isHorizontal {
+            let ypos = (self.frame.size.height - imgSize.height) * 0.5
+            posFunc = { (mid, mkr) in  CGPoint(x: mid - mkr.image.size.width*0.5, y:ypos)}
+            
+        } else {
+            let xpos = (self.frame.size.width - imgSize.width) * 0.5
+            posFunc = { (mid, mkr) in CGPoint(x: xpos, y:mid - mkr.image.size.height*0.5) }
+        }
+        for (mid, mkr) in zip(topMids, topMarkers) {
+            mkr.image.draw(at: posFunc(mid, mkr), blendMode: .normal, alpha: (1.0-0.5*self.zoomExtent))
         }
     }
     
     private func placeAndFillInnerLabelView() {
-        guard let markers = self.innerMarkers else { return }
         let innerMids = self.lineModel.calculateInnerPositions(forZoomExtent: self.zoomExtent)
-        let curvedExtent = 1.0 - ((1.0-self.zoomExtent)*(1.0-self.zoomExtent))
-        let rα = (self.lineModel.inner1.itemSizes?.first ?? 0)*0.5
-        let rΩ = (self.lineModel.inner1.itemSizes?.last ?? 0)*0.5
-        let markerImgSize = markers.first?.image.size ?? CGSize.zero
-        let rowBreadth = self.zoomingDimension(markerImgSize)
+        guard let
+            markers = self.innerMarkers,
+            let midα = innerMids.first,
+            let midΩ = innerMids.last,
+            let rα = self.lineModel.inner1.itemSizes?.first.map({$0*0.5}),
+            let rΩ = self.lineModel.inner1.itemSizes?.last.map({$0*0.5})
 
-        let x0:CGFloat, y0:CGFloat, w: CGFloat, h: CGFloat
+        else { return }
+        let curvedExtent = 1.0 - ((1.0-self.zoomExtent)*(1.0-self.zoomExtent))
+        let markerImgSize = markers.first?.image.size ?? CGSize.zero
         let margin = innerLabelViewMargin + innerLabelViewPadding
+        
+        let s0 = midα - rα - margin
+        let sd = midΩ - s0 + rΩ + 2*margin
+        let zd = self.zoomingDimension(markerImgSize) + 2*margin
         if self.isHorizontal {
             let labelsLateralOffset = -((self.zoomDistance+55) * curvedExtent) - 0
-            x0 = (innerMids.first ?? 0) - rα - margin
-            y0 = labelsLateralOffset - ceil(rowBreadth*0.5) - margin
-            w = (innerMids.last ?? 0) - x0 + rΩ + 2*margin
-            h = rowBreadth + 2*margin
+            let y0 = labelsLateralOffset - ceil(self.zoomingDimension(markerImgSize)*0.5) - margin
+            self.innerLabelFrameView.frame = CGRect(x: s0, y: y0, width: sd, height: zd)
         } else {
-            y0 = (innerMids.first ?? 0) - rα - margin
-            w = rowBreadth + 2*margin
-            x0 = min((self.frame.size.width - w) * 0.5, self.frame.size.width - w + margin)
-            h = (innerMids.last ?? 0) - y0 + rΩ + margin
+            let x0 = min((self.frame.size.width - zd) * 0.5, self.frame.size.width - zd + margin)
+            self.innerLabelFrameView.frame = CGRect(x: x0, y: s0, width: zd, height: sd)
         }
-        self.innerLabelFrameView.frame = CGRect(x: x0, y: y0, width: w, height: h)
         
         // -- Now, fill the view
         let imageSize = self.innerLabelFrameView.bounds.size
@@ -559,12 +557,10 @@ class KFIndexBar: UIControl {
         if self.isHorizontal {
             let ypos = (imageSize.height - markerImgSize.height) * 0.5
             let xoff = innerLabelViewMargin-self.innerLabelFrameView.frame.origin.x
-            
             posFunc = { (mid, mkr) in CGPoint(x:mid + xoff - mkr.image.size.width * 0.5, y:ypos) }
         } else {
             let xpos = (imageSize.width - markerImgSize.width) * 0.5
-            let yoff = -self.innerLabelFrameView.frame.origin.y
-
+            let yoff = innerLabelViewMargin-self.innerLabelFrameView.frame.origin.y
             posFunc = { (mid, mkr) in CGPoint(x:xpos, y:mid + yoff - mkr.image.size.height * 0.5) }
         }
         for (mid, mkr) in zip(innerMids, markers) {
