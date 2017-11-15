@@ -30,11 +30,9 @@ class KFIndexBar: UIControl {
     var dataSource: KFIndexBarDataSource? = nil
     
     /** The offset in the list of displayed items of the parent collection view that the last selected label on the index bar points to. */
-    var currentOffset: Int { return self._currentOffset }
-    
-    private var _currentOffset: Int = 0 {
+    public private(set) var currentOffset: Int = 0 {
         didSet(oldValue) {
-            if self._currentOffset != oldValue {
+            if self.currentOffset != oldValue {
                 self.sendActions(for: .valueChanged)
             }
         }
@@ -417,6 +415,7 @@ class KFIndexBar: UIControl {
             }
         }
     }
+    
     var zoomExtent: CGFloat {
         switch(self.interactionState) {
         case .ready, .draggingTop, .userDraggedToZoom(_): return 0.0
@@ -444,7 +443,6 @@ class KFIndexBar: UIControl {
         let offsetTo = markerIndex<topMarkers.count-1 ? topMarkers[markerIndex+1].offset : Int.max
         return self.dataSource?.indexBar(self, markersBetween: offsetFrom, and: offsetTo)
     }
-    
     
     // MARK: The snap-shut animation mechanism. (As labels are drawn, we cannot use CoreAnimation for this.)
     // The parts of the state transition function taking place during animation are handled here
@@ -593,7 +591,7 @@ class KFIndexBar: UIControl {
         let loc = touch.location(in: self)
         let sc = self.selectionCoord(loc)
         if let index = self.topLabelIndex(forPosition: sc), let offset = self.topDisplayableMarkers?[index].offset {
-            self._currentOffset = offset
+            self.currentOffset = offset
         }
         self.interactionState = .draggingTop
         return true
@@ -608,7 +606,7 @@ class KFIndexBar: UIControl {
         case .draggingTop:
             if let topIndex = self.topLabelIndex(forPosition: sc) {
                 if zc >= 0.0, let offset = self.topDisplayableMarkers?[topIndex].offset {
-                    self._currentOffset = offset
+                    self.currentOffset = offset
                 }
                 if zc < 0.0 {
                     self.interactionState = .userDraggedToZoom(underTopIndex: topIndex)
@@ -624,7 +622,7 @@ class KFIndexBar: UIControl {
             }
         case .draggingInner(_, let innerMarkers):
             if let index = innerLabelIndex(forPosition: sc) {
-                self._currentOffset = innerMarkers[index].offset
+                self.currentOffset = innerMarkers[index].offset
             }
         default: break
         }
